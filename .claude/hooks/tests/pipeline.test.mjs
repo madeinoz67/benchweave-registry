@@ -2,7 +2,7 @@
 //
 // Ported 2026-09-15 from the main benchweave-ui repository (which adopted the system from
 // muninndb, issue #825 lineage). One rule was added at the port, and it has its own tests in
-// the D4 section below: every proposal from THIS repository carries the literal `sdk` tag.
+// the D4 section below: every proposal from THIS repository carries the literal `registry` tag.
 //
 // Run: node --test .claude/hooks/tests/*.test.mjs      <- the glob, expanded by the shell
 //
@@ -343,46 +343,46 @@ test('D4: the validator rejects every shape the real ledger actually drifted int
   assert.equal(validate(proposal(1)).ok, true)
 })
 
-// ── The port's one delta: this repository's proposals carry the `sdk` tag ─────────────────
+// ── The port's one delta: this repository's proposals carry the `registry` tag ─────────────────
 //
-// Repo identity, not a finding: a vault reader can tell a benchweave-sdk finding from a
+// Repo identity, not a finding: a vault reader can tell a benchweave-registry finding from a
 // main-repo finding without parsing paths. The rule lives in memory-schema.mjs so the
 // producer (memory-propose), the guard (ledger-guard) and the consumer (drain) all enforce
 // it — there is no path into the vault that skips it.
-test('sdk tag is mandatory: the validator rejects a proposal without it, by name', () => {
-  const noSdk = validate(proposal(1, { tags: ['gotcha'] }))
-  assert.equal(noSdk.ok, false, 'a tagged-but-sdk-less proposal must not validate')
+test('registry tag is mandatory: the validator rejects a proposal without it, by name', () => {
+  const noRepoTag = validate(proposal(1, { tags: ['gotcha'] }))
+  assert.equal(noRepoTag.ok, false, 'a tagged-but-registry-less proposal must not validate')
   assert.ok(
-    noSdk.problems.some((x) => x.includes('sdk-tag-required')),
-    `problems must name the rule: ${JSON.stringify(noSdk.problems)}`
+    noRepoTag.problems.some((x) => x.includes('registry-tag-required')),
+    `problems must name the rule: ${JSON.stringify(noRepoTag.problems)}`
   )
-  assert.match(noSdk.problems.join('; '), /sdk-tag-required: proposals from this repository carry the sdk tag/)
-  const withSdk = validate(proposal(2, { tags: ['gotcha', 'registry'] }))
-  assert.equal(withSdk.ok, true, `a descriptive tag plus sdk validates: ${JSON.stringify(withSdk.problems)}`)
+  assert.match(noRepoTag.problems.join('; '), /registry-tag-required: proposals from this repository carry the registry tag/)
+  const withRepoTag = validate(proposal(2, { tags: ['gotcha', 'registry'] }))
+  assert.equal(withRepoTag.ok, true, `a descriptive tag plus registry validates: ${JSON.stringify(withRepoTag.problems)}`)
 })
 
-// [SDK-repo delta, tightened 2026-09-15] `sdk` is repo identity, not a finding tag: it rides
+// [SDK-repo delta, tightened 2026-09-15] `registry` is repo identity, not a finding tag: it rides
 // WITH >= 1 descriptive tag and never satisfies the minimum on its own. A vault reader
-// filtering by tag needs a descriptive lane to find the memory on; `sdk` only says which
+// filtering by tag needs a descriptive lane to find the memory on; `registry` only says which
 // repo proposed it.
-test('sdk alone does not satisfy the tag rule: ["sdk"] is rejected with an error naming the descriptive-tag requirement', () => {
+test('registry alone does not satisfy the tag rule: ["registry"] is rejected with an error naming the descriptive-tag requirement', () => {
   const bareRepoTag = validate(proposal(1, { tags: ['registry'] }))
-  assert.equal(bareRepoTag.ok, false, 'a tags array of just ["sdk"] must not validate — identity is not a finding tag')
+  assert.equal(bareRepoTag.ok, false, 'a tags array of just ["registry"] must not validate — identity is not a finding tag')
   assert.match(
-    bareSdk.problems.join('; '),
-    /descriptive tag besides "sdk"/,
-    `the error must name the requirement: ${JSON.stringify(bareSdk.problems)}`
+    bareRepoTag.problems.join('; '),
+    /descriptive tag besides "registry"/,
+    `the error must name the requirement: ${JSON.stringify(bareRepoTag.problems)}`
   )
-  const sdkPlusDescriptive = validate(proposal(2, { tags: ['routing', 'sdk'] }))
-  assert.equal(sdkPlusDescriptive.ok, true, `sdk riding with a descriptive tag validates: ${JSON.stringify(sdkPlusDescriptive.problems)}`)
+  const repoTagPlusDescriptive = validate(proposal(2, { tags: ['routing', 'registry'] }))
+  assert.equal(repoTagPlusDescriptive.ok, true, `registry riding with a descriptive tag validates: ${JSON.stringify(repoTagPlusDescriptive.problems)}`)
 })
 
-test('sdk-tag-required: memory-propose rejects a proposal without the sdk tag and appends nothing', async () => {
+test('registry-tag-required: memory-propose rejects a proposal without the sdk tag and appends nothing', async () => {
   const { root, ledger } = makeRepo([])
   const rec = proposal(1, { tags: ['gotcha'] })
   const r = await runNode(PROPOSE, [], { root, env: { __stdin: JSON.stringify(rec) } })
   assert.equal(r.code, 1)
-  assert.match(r.err, /sdk-tag-required: proposals from this repository carry the sdk tag/)
+  assert.match(r.err, /registry-tag-required: proposals from this repository carry the registry tag/)
   assert.equal(lines(ledger).length, 0, 'an sdk-less proposal must not enter the ledger')
 })
 
@@ -396,7 +396,7 @@ test('a ledger line without the sdk tag dead-letters at the drain — there is n
   assert.equal(rc.counts.written, 0)
   assert.equal(srv.calls.filter((c) => c.name === 'muninn_remember').length, 0)
   const dl = JSON.parse(lines(join(root, '.claude', 'memory-proposals.deadletter.jsonl'))[0])
-  assert.match(dl.reason, /sdk-tag-required/)
+  assert.match(dl.reason, /registry-tag-required/)
 })
 
 test('D4: memory-propose rejects a batch atomically — a bad record appends nothing', async () => {
@@ -433,9 +433,9 @@ test('D4: memory-propose accepts pretty-printed JSON, an array, and JSONL', asyn
 // ── The migration ─────────────────────────────────────────────────────────────────────────
 test('migration repairs the observed drift and leaves the genuinely broken for dead-lettering', async () => {
   const { root, ledger } = makeRepo([
-    { concept: 'missing vault only', content: 'x'.repeat(60), type: 'fact', tags: ['sdk'], issue: 825 },
-    { type: 'fact', title: 'title/body', body: 'y'.repeat(60), tags: ['t', 'sdk'] },
-    { vault: 'v', concept: 'ok already', content: 'z'.repeat(60), tags: ['drift', 'sdk'] },
+    { concept: 'missing vault only', content: 'x'.repeat(60), type: 'fact', tags: ['registry'], issue: 825 },
+    { type: 'fact', title: 'title/body', body: 'y'.repeat(60), tags: ['t', 'registry'] },
+    { vault: 'v', concept: 'ok already', content: 'z'.repeat(60), tags: ['drift', 'registry'] },
     { vault: 'v', concept: 'unfixable', content: 'nope' },
   ])
   const r = await runNode(MIGRATE, ['--vault', 'testvault'], { root })
@@ -443,7 +443,7 @@ test('migration repairs the observed drift and leaves the genuinely broken for d
   const after = lines(ledger).map((l) => JSON.parse(l))
   assert.equal(after.length, 4, 'migration never drops a line')
   assert.equal(after[0].vault, 'testvault')
-  assert.deepEqual(after[0].tags, ['sdk', 'issue-825'], 'tracker provenance is folded into tags, not dropped')
+  assert.deepEqual(after[0].tags, ['registry', 'issue-825'], 'tracker provenance is folded into tags, not dropped')
   assert.equal(after[1].concept, 'title/body')
   assert.equal(after[1].content, 'y'.repeat(60))
   assert.equal(after[1].vault, 'testvault')
@@ -735,10 +735,10 @@ test('F5: a re-proposal whose non-identity fields changed is reported, never sil
 test('F5: an idempotency hit on a proposal with only routing tags reports the tags annotation, and nothing else', async (t) => {
   const srv = await fakeMuninn({ onRemember: () => ({ id: 'eng-existing', idempotent: true }) })
   t.after(() => srv.close())
-  // Tightened 2026-09-15: bare ["sdk"] can no longer validate, so the old quiet case (a
+  // Tightened 2026-09-15: bare ["registry"] can no longer validate, so the old quiet case (a
   // tags array with no annotative content) is structurally gone — every valid proposal
   // carries a descriptive tag, and the drain says out loud that it did not land.
-  const bare = { vault: 'testvault', concept: 'bare', content: 'A proposal carrying identity fields, the mandatory sdk tag, one descriptive tag, and nothing else at all.', tags: ['sdk', 'routing'] }
+  const bare = { vault: 'testvault', concept: 'bare', content: 'A proposal carrying identity fields, the mandatory registry tag, one descriptive tag, and nothing else at all.', tags: ['registry', 'routing'] }
   const { root } = makeRepo([bare])
   const r = await runNode(DRAIN, ['--base', srv.base], { root })
   assert.equal(readReceiptFile(root).counts.unapplied_annotations, 1,
@@ -766,7 +766,7 @@ test('a half-written trailing line is left for the next run, never dead-lettered
   assert.equal(rc.ledger.partial_tail_bytes, torn.length)
 
   // …and once the writer finishes the line, it drains normally.
-  appendFileSync(ledger, 'ent":"The rest of the line arrives on the second write, which is what makes it transient.","tags":["transient","sdk"]}\n')
+  appendFileSync(ledger, 'ent":"The rest of the line arrives on the second write, which is what makes it transient.","tags":["transient","registry"]}\n')
   await runNode(DRAIN, ['--base', srv.base], { root })
   assert.equal(lines(ledger).length, 0)
   assert.ok(srv.calls.some((c) => c.name === 'muninn_remember' && c.args.concept === 'torn'))

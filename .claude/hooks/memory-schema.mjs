@@ -133,7 +133,7 @@ export function validate(p) {
   }
   if (p.entities !== undefined && !Array.isArray(p.entities)) problems.push(`'entities' must be an array`)
   if (Array.isArray(p.tags) && !p.tags.includes(REQUIRED_TAG)) {
-    problems.push(`sdk-tag-required: proposals from this repository carry the ${REQUIRED_TAG} tag`)
+    problems.push(`${REQUIRED_TAG}-tag-required: proposals from this repository carry the ${REQUIRED_TAG} tag`)
   }
   return { ok: problems.length === 0, problems }
 }

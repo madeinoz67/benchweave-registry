@@ -20,6 +20,8 @@ jobs:
         run: uv sync --locked
       - name: Records validity (CR-9/10/56/60, CR-38, CR-35)
         run: uv run python scripts/validate_records.py
+      - name: Index regeneration check (CR-21)
+        run: uv run python scripts/generate_index.py --check
       - name: Unit tests (validity arms)
         run: uv run pytest -q
 
