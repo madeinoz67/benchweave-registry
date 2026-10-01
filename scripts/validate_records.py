@@ -150,6 +150,21 @@ def validate_tree(root: Path) -> list[str]:
     reviews = _review_records(parsed_by_path)
     manifests = _release_manifests(releases_dir)
 
+    # CR-35's releases half: no dev-prefixed origin or dependency lineage in
+    # the published tree (the docstring's records-AND-releases claim, made
+    # true here): a dev-unsigned origin under releases/ refuses.
+    for (publisher, plugin, version), manifest_path in sorted(manifests.items()):
+        manifest = json.loads(manifest_path.read_bytes())
+        if str(manifest.get("registry_id", "")).startswith("dev-"):
+            findings.append(
+                f"dev_lineage_in_release:{manifest_path.relative_to(releases_dir).as_posix()}"
+            )
+        for dep in manifest.get("dependencies", []):
+            if str(dep.get("registry_id", "")).startswith("dev-"):
+                findings.append(
+                    f"dev_lineage_in_release:{manifest_path.relative_to(releases_dir).as_posix()}"
+                )
+
     for path, parsed in parsed_by_path.items():
         # CR-35's index half: no dev-prefixed registry id in any record.
         if "dev-" in json.dumps(parsed):

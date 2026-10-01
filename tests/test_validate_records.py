@@ -254,3 +254,44 @@ def test_main_returns_zero_on_valid_tree(
     _manifest, _publish = _consistent_release(tmp_path, copy.deepcopy(_DEPS))
     assert vr.main(str(tmp_path)) == 0
     assert "2 records valid" in capsys.readouterr().out
+
+# --- M1 (CR-35 fold): the published tree refuses dev-lineage ---------------------
+
+
+def test_dev_lineage_release_tree_is_refused(tmp_path: Path) -> None:
+    """CR-35's releases half: a dev-prefixed origin under releases/ refuses
+    (the validity gate's docstring claims records AND releases)."""
+    dev_release = tmp_path / "releases" / "dev-local" / "dev" / "widget" / "0.1.0"
+    dev_release.mkdir(parents=True)
+    (dev_release / "manifest.json").write_bytes(
+        vr.canonical_bytes(
+            {"registry_id": "dev-local", "package_id": "dev/widget", "version": "0.1.0"}
+        )
+    )
+    findings = vr.validate_tree(tmp_path)
+    assert any(f.startswith("dev_lineage_in_release:") for f in findings), findings
+
+
+def test_dev_lineage_dependency_in_release_is_refused(tmp_path: Path) -> None:
+    signed_origin = tmp_path / "releases" / "benchweave-registry" / "acme" / "tool" / "1.0.0"
+    signed_origin.mkdir(parents=True)
+    (signed_origin / "manifest.json").write_bytes(
+        vr.canonical_bytes(
+            {
+                "registry_id": "benchweave-registry",
+                "package_id": "acme/tool",
+                "version": "1.0.0",
+                "dependencies": [
+                    {
+                        "registry_id": "dev-local",
+                        "package_id": "dev/widget",
+                        "version": "1.0.0",
+                        "manifest_sha256": "e" * 64,
+                    }
+                ],
+            }
+        )
+    )
+    findings = vr.validate_tree(tmp_path)
+    assert any(f.startswith("dev_lineage_in_release:") for f in findings), findings
+
