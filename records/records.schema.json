@@ -13,13 +13,20 @@
   ],
   "properties": {
     "record_type": {
-      "enum": ["review", "lifecycle"]
+      "enum": [
+        "review",
+        "lifecycle"
+      ]
     },
     "record_version": {
       "const": "1.0.0"
     },
     "kind": {
-      "enum": ["admitted-release", "in-tree-fixture", "community-shared"],
+      "enum": [
+        "admitted-release",
+        "in-tree-fixture",
+        "community-shared"
+      ],
       "description": "CR-56 kind tag. Machine-checked at write time; a records entry without a kind is refused."
     },
     "created_at": {
@@ -46,7 +53,8 @@
         "closure_digest",
         "capability_declaration",
         "platform_findings",
-        "execution_model_disclosure"
+        "execution_model_disclosure",
+        "components"
       ],
       "additionalProperties": false,
       "properties": {
@@ -74,7 +82,11 @@
           "description": "The identified accountable reviewer (CR-8)."
         },
         "outcome": {
-          "enum": ["accepted", "changes-requested", "rejected"]
+          "enum": [
+            "accepted",
+            "changes-requested",
+            "rejected"
+          ]
         },
         "submission_manifest_sha256": {
           "type": "string",
@@ -117,14 +129,24 @@
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["source", "state"],
+            "required": [
+              "source",
+              "state"
+            ],
             "additionalProperties": false,
             "properties": {
               "source": {
-                "enum": ["code-scanning", "dependency-review", "secret-scanning"]
+                "enum": [
+                  "code-scanning",
+                  "dependency-review",
+                  "secret-scanning"
+                ]
               },
               "state": {
-                "enum": ["consulted-no-findings", "consulted-findings-addressed"],
+                "enum": [
+                  "consulted-no-findings",
+                  "consulted-findings-addressed"
+                ],
                 "description": "Advisory to the accountable reviewer (CR-60); findings never mark a release verified (NFR-S1)."
               },
               "detail": {
@@ -150,6 +172,27 @@
         },
         "notes": {
           "type": "string"
+        },
+        "components": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "adapter-source",
+              "build-provenance",
+              "capability-declaration",
+              "closure-diff",
+              "conformance-evidence",
+              "dependency-lock",
+              "descriptor",
+              "licence",
+              "payload-inventory",
+              "release-manifest"
+            ]
+          },
+          "description": "The CR-1 artefact-component set (A2): the same enumeration the publishing docs list and the SDK packaging tool refuses without \u2014 three-way equality is pinned by scripts/check_enumeration.py in CI. The reviewer confirms each component was present."
         }
       }
     },
@@ -165,7 +208,14 @@
       "additionalProperties": false,
       "properties": {
         "op": {
-          "enum": ["publish", "yank", "advisory", "unlist", "takedown", "transfer"]
+          "enum": [
+            "publish",
+            "yank",
+            "advisory",
+            "unlist",
+            "takedown",
+            "transfer"
+          ]
         },
         "publisher": {
           "type": "string",
@@ -189,15 +239,24 @@
         },
         "closure": {
           "type": "object",
-          "required": ["prior", "added", "changed", "removed"],
+          "required": [
+            "prior",
+            "added",
+            "changed",
+            "removed"
+          ],
           "additionalProperties": false,
           "properties": {
             "prior": {
               "oneOf": [
-                {"type": "null"},
+                {
+                  "type": "null"
+                },
                 {
                   "type": "object",
-                  "required": ["version"],
+                  "required": [
+                    "version"
+                  ],
                   "additionalProperties": false,
                   "properties": {
                     "version": {
@@ -210,17 +269,26 @@
             },
             "added": {
               "type": "array",
-              "items": {"type": "string", "minLength": 1},
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "changed": {
               "type": "array",
-              "items": {"type": "string", "minLength": 1},
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "removed": {
               "type": "array",
-              "items": {"type": "string", "minLength": 1},
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             }
           },
@@ -232,17 +300,33 @@
         },
         "transfer": {
           "type": "object",
-          "required": ["from_publisher", "to_publisher", "consents"],
+          "required": [
+            "from_publisher",
+            "to_publisher",
+            "consents"
+          ],
           "additionalProperties": false,
           "properties": {
-            "from_publisher": {"type": "string", "minLength": 1},
-            "to_publisher": {"type": "string", "minLength": 1},
+            "from_publisher": {
+              "type": "string",
+              "minLength": 1
+            },
+            "to_publisher": {
+              "type": "string",
+              "minLength": 1
+            },
             "consents": {
               "type": "array",
               "minItems": 2,
-              "items": {"type": "string", "minLength": 1}
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             },
-            "vetting_reference": {"type": "string", "minLength": 1}
+            "vetting_reference": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       }
@@ -252,33 +336,53 @@
   "allOf": [
     {
       "if": {
-        "properties": {"record_type": {"const": "review"}}
+        "properties": {
+          "record_type": {
+            "const": "review"
+          }
+        }
       },
       "then": {
-        "required": ["review"]
-      }
-    },
-    {
-      "if": {
-        "properties": {"record_type": {"const": "lifecycle"}}
-      },
-      "then": {
-        "required": ["lifecycle"]
+        "required": [
+          "review"
+        ]
       }
     },
     {
       "if": {
         "properties": {
-          "record_type": {"const": "review"},
+          "record_type": {
+            "const": "lifecycle"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lifecycle"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "review"
+          },
           "review": {
-            "properties": {"outcome": {"const": "changes-requested"}}
+            "properties": {
+              "outcome": {
+                "const": "changes-requested"
+              }
+            }
           }
         }
       },
       "then": {
         "properties": {
           "review": {
-            "required": ["cited_failures"]
+            "required": [
+              "cited_failures"
+            ]
           }
         }
       }
@@ -286,16 +390,26 @@
     {
       "if": {
         "properties": {
-          "record_type": {"const": "lifecycle"},
+          "record_type": {
+            "const": "lifecycle"
+          },
           "lifecycle": {
-            "properties": {"op": {"const": "publish"}}
+            "properties": {
+              "op": {
+                "const": "publish"
+              }
+            }
           }
         }
       },
       "then": {
         "properties": {
           "lifecycle": {
-            "required": ["release_manifest_sha256", "closure", "closure_digest"]
+            "required": [
+              "release_manifest_sha256",
+              "closure",
+              "closure_digest"
+            ]
           }
         }
       }
@@ -303,16 +417,24 @@
     {
       "if": {
         "properties": {
-          "record_type": {"const": "lifecycle"},
+          "record_type": {
+            "const": "lifecycle"
+          },
           "lifecycle": {
-            "properties": {"op": {"const": "transfer"}}
+            "properties": {
+              "op": {
+                "const": "transfer"
+              }
+            }
           }
         }
       },
       "then": {
         "properties": {
           "lifecycle": {
-            "required": ["transfer"]
+            "required": [
+              "transfer"
+            ]
           }
         }
       }

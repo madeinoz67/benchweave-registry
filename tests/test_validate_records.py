@@ -47,6 +47,18 @@ def review_record(outcome: str = "accepted") -> dict[str, Any]:
             "execution_model_disclosure": (
                 "in-process execution with full gateway authority; no Python sandbox"
             ),
+            "components": [
+                "adapter-source",
+                "build-provenance",
+                "capability-declaration",
+                "closure-diff",
+                "conformance-evidence",
+                "dependency-lock",
+                "descriptor",
+                "licence",
+                "payload-inventory",
+                "release-manifest",
+            ],
         },
     }
     if outcome == "changes-requested":
