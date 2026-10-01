@@ -1,0 +1,33 @@
+[project]
+name = "benchweave-registry-checks"
+version = "0.1.0"
+description = "Records-validity and admission-replay checks for the BenchWeave registry lane; tooling only, never published."
+requires-python = ">=3.13"
+dependencies = [
+    "jsonschema[format]==4.26.0",
+    "cryptography==45.0.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.6",
+    "mypy==2.3.1",
+    "types-jsonschema==4.26.0.20260518",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["scripts", "tests"]
+
+[tool.pytest.ini_options]
+addopts = "-q -p no:cacheprovider"
+testpaths = ["tests"]

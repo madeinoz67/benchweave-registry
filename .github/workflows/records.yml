@@ -1,0 +1,93 @@
+name: records
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.13"
+      - name: Sync environment
+        run: uv sync --locked
+      - name: Records validity (CR-9/10/56/60, CR-38, CR-35)
+        run: uv run python scripts/validate_records.py
+      - name: Unit tests (validity arms)
+        run: uv run pytest -q
+
+  replay:
+    # Q10: the authoritative admission replay runs in repo-of-record CI, at the
+    # committed gateway-ref pin (F5: a red replay means a bad submission, not
+    # gateway drift). A drift job below warns when gateway main advances.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read the gateway pin
+        id: pin
+        run: echo "ref=$(cat gateway-ref)" >> "$GITHUB_OUTPUT"
+      - name: Checkout the gateway at the pinned ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: madeinoz67/benchweave
+          ref: ${{ steps.pin.outputs.ref }}
+          path: gateway
+          fetch-depth: 1
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.13"
+      - name: Admission replay through unmodified gateway admission (CR-13)
+        run: uv run --project gateway python scripts/replay_admission.py --gateway gateway
+
+  enumeration:
+    # A2: docs/tool/schema three-way enumeration equality. The gateway checkout
+    # at the pin carries the publishing docs and the SDK submodule (recursive).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read the gateway pin
+        id: pin
+        run: echo "ref=$(cat gateway-ref)" >> "$GITHUB_OUTPUT"
+      - name: Checkout the gateway at the pinned ref (with SDK submodule)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: madeinoz67/benchweave
+          ref: ${{ steps.pin.outputs.ref }}
+          path: gateway
+          submodules: recursive
+          fetch-depth: 1
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.13"
+      - name: Sync check environment
+        run: uv sync --locked
+      - name: Three-way enumeration equality (docs == tool == schema)
+        run: |
+          uv run python scripts/check_enumeration.py \
+            --docs gateway/docs/publishing-guide.md \
+            --sdk-module gateway/packages/sdk/src/benchweave_sdk/publishing.py
+
+  drift:
+    # The CON-12 staleness pattern: warn (not fail) when gateway main advances
+    # past the pin — the pin advances deliberately per train.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Gateway drift notice
+        run: |
+          PINNED="$(cat gateway-ref)"
+          LATEST="$(git ls-remote https://github.com/madeinoz67/benchweave.git refs/heads/main | cut -f1)"
+          if [ "$PINNED" != "$LATEST" ]; then
+            echo "::warning::gateway-ref pin $PINNED is behind main $LATEST — advance the pin deliberately on the next train"
+          else
+            echo "gateway-ref pin is current: $PINNED"
+          fi

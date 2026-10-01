@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:benchweave-registry:records:1.0.0",
+  "title": "BenchWeave registry lane records",
+  "description": "Canonical-JSON review and lifecycle records committed in this repository. Structural validity does not establish trust; the records-validity CI and the admission replay are the machine checks, and identified human review is the accountable one.",
+  "type": "object",
+  "required": [
+    "record_type",
+    "record_version",
+    "kind",
+    "created_at",
+    "actor"
+  ],
+  "properties": {
+    "record_type": {
+      "enum": ["review", "lifecycle"]
+    },
+    "record_version": {
+      "const": "1.0.0"
+    },
+    "kind": {
+      "enum": ["admitted-release", "in-tree-fixture", "community-shared"],
+      "description": "CR-56 kind tag. Machine-checked at write time; a records entry without a kind is refused."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The GitHub identity responsible for this record."
+    },
+    "review": {
+      "type": "object",
+      "required": [
+        "publisher",
+        "plugin",
+        "version",
+        "checklist_id",
+        "checklist_version",
+        "reviewer_id",
+        "outcome",
+        "submission_manifest_sha256",
+        "source_revision",
+        "closure_digest",
+        "capability_declaration",
+        "platform_findings",
+        "execution_model_disclosure"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "publisher": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "plugin": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "checklist_id": {
+          "const": "review-checklist"
+        },
+        "checklist_version": {
+          "const": "1"
+        },
+        "reviewer_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The identified accountable reviewer (CR-8)."
+        },
+        "outcome": {
+          "enum": ["accepted", "changes-requested", "rejected"]
+        },
+        "submission_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "D_sub: the canonical digest of the reviewed submission manifest. Any post-review change to payload, source or pins breaks this pin and CI refuses (CR-11/CR-14)."
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "description": "The immutable commit digest the review ran against (CR-36)."
+        },
+        "closure_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "The dependency-closure digest the sign-off covered (CR-38); must equal the published release's closure digest."
+        },
+        "capability_declaration": {
+          "type": "object",
+          "required": [
+            "network_egress",
+            "subprocess_or_native_library",
+            "filesystem_writes_beyond_evidence_retention"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "network_egress": {
+              "type": "boolean"
+            },
+            "subprocess_or_native_library": {
+              "type": "boolean"
+            },
+            "filesystem_writes_beyond_evidence_retention": {
+              "type": "boolean"
+            }
+          },
+          "description": "CR-45: the closed three-way enumeration; all-false is the explicit 'none'. Enforcement is deploy-policy only (Q13); this declaration is discovery input."
+        },
+        "platform_findings": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["source", "state"],
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "enum": ["code-scanning", "dependency-review", "secret-scanning"]
+              },
+              "state": {
+                "enum": ["consulted-no-findings", "consulted-findings-addressed"],
+                "description": "Advisory to the accountable reviewer (CR-60); findings never mark a release verified (NFR-S1)."
+              },
+              "detail": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "description": "The platform findings consulted at the pinned revision (CR-60). A review record naming none is invalid under the same CI check that enforces CR-10."
+        },
+        "execution_model_disclosure": {
+          "const": "in-process execution with full gateway authority; no Python sandbox",
+          "description": "CR-52: the approval decision input states the execution model plainly; an approval recorded without it fails the audit check."
+        },
+        "cited_failures": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Failed requirement or checklist row ids. Required on changes-requested outcomes (CR-10)."
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": [
+        "op",
+        "publisher",
+        "plugin",
+        "version",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": ["publish", "yank", "advisory", "unlist", "takedown", "transfer"]
+        },
+        "publisher": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "plugin": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "closure": {
+          "type": "object",
+          "required": ["prior", "added", "changed", "removed"],
+          "additionalProperties": false,
+          "properties": {
+            "prior": {
+              "oneOf": [
+                {"type": "null"},
+                {
+                  "type": "object",
+                  "required": ["version"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+                    }
+                  }
+                }
+              ]
+            },
+            "added": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1},
+              "uniqueItems": true
+            },
+            "changed": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1},
+              "uniqueItems": true
+            },
+            "removed": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1},
+              "uniqueItems": true
+            }
+          },
+          "description": "CR-38: dependencies added/changed/removed versus the prior release of the same package; prior is null on an initial release. Absent on a publish record is refused (closure_diff_absent)."
+        },
+        "closure_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "transfer": {
+          "type": "object",
+          "required": ["from_publisher", "to_publisher", "consents"],
+          "additionalProperties": false,
+          "properties": {
+            "from_publisher": {"type": "string", "minLength": 1},
+            "to_publisher": {"type": "string", "minLength": 1},
+            "consents": {
+              "type": "array",
+              "minItems": 2,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "vetting_reference": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {"record_type": {"const": "review"}}
+      },
+      "then": {
+        "required": ["review"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"record_type": {"const": "lifecycle"}}
+      },
+      "then": {
+        "required": ["lifecycle"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {"const": "review"},
+          "review": {
+            "properties": {"outcome": {"const": "changes-requested"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "review": {
+            "required": ["cited_failures"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {"const": "lifecycle"},
+          "lifecycle": {
+            "properties": {"op": {"const": "publish"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "lifecycle": {
+            "required": ["release_manifest_sha256", "closure", "closure_digest"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {"const": "lifecycle"},
+          "lifecycle": {
+            "properties": {"op": {"const": "transfer"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "lifecycle": {
+            "required": ["transfer"]
+          }
+        }
+      }
+    }
+  ]
+}

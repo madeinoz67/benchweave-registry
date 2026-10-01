@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:benchweave-registry:publishers:1.0.0",
+  "title": "BenchWeave registry vetted publishers",
+  "description": "Vetted publisher identities and their namespace assignments (CR-15/CR-39). A publisher identity is a GitHub identity plus a publisher name (NFR-7); nothing more is collected.",
+  "type": "object",
+  "required": ["publishers_version", "publishers"],
+  "additionalProperties": false,
+  "properties": {
+    "publishers_version": {
+      "const": 1
+    },
+    "publishers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["publisher_id", "namespace", "github", "vetted_at", "publisher_repo_protections"],
+        "additionalProperties": false,
+        "properties": {
+          "publisher_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "namespace": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "The namespace this publisher owns (CR-15): package ids under this prefix belong to this publisher."
+          },
+          "github": {
+            "type": "string",
+            "minLength": 1
+          },
+          "vetted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publisher_repo_protections": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["protection", "state"],
+              "additionalProperties": false,
+              "properties": {
+                "protection": {
+                  "enum": ["push-protection", "code-scanning", "advisories"]
+                },
+                "state": {
+                  "const": "declared-not-verified",
+                  "description": "Q21: declared in the CR-39 vetting checklist and rendered declared-not-verified; no enforcement claim is made over repositories the lane cannot read."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
