@@ -22,7 +22,7 @@ Layout:
 | `keys/main.pub.pem` | The public trust root. The private half is maintainer-custodied and never enters this repository or any CI (CR-12). |
 | `gateway-ref` | The pinned gateway commit the admission replay runs at (Q10, F5). |
 | `scripts/validate_records.py` | The records-validity gate (CI job `validity`). |
-| `scripts/replay_admission.py` | The authoritative admission replay through unmodified gateway admission (CI job `replay`). |
+| `scripts/replay_admission.py` | On-demand admission replay through unmodified gateway admission (not a publish-time gate; the client enforces). |
 | `scripts/verify.py` | Whole-clone verification: records + signatures + digests + the accountability chain (CR-54). |
 
 ## Verifying a release (two commands, nothing else)
@@ -53,8 +53,11 @@ alone: no gateway repository, no PR thread, no running service (S3/A3).
    gateway repository). The review block rides inside the signed manifest
    (registry standard 0.1.2; Q2) — one signature attests release and review
    together.
-4. CI replays admission through unmodified gateway admission at the pinned
-   `gateway-ref` before anything merges.
+4. The release RECORDS the pinned gateway version it targets
+   (`gateway_ref` on the publish record, advertised in the index) — the
+   registry states and advertises; the CLIENT enforces at import time
+   (`scripts/replay_admission.py` is the on-demand verification tool, not a
+   publish-time gate).
 
 ## Family conventions
 

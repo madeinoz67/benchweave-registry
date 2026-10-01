@@ -295,3 +295,29 @@ def test_dev_lineage_dependency_in_release_is_refused(tmp_path: Path) -> None:
     findings = vr.validate_tree(tmp_path)
     assert any(f.startswith("dev_lineage_in_release:") for f in findings), findings
 
+# --- F1 rework (issue #223): recorded and advertised, never enforced ----------
+
+
+def test_publish_record_advertises_gateway_ref() -> None:
+    record = publish_record()
+    record["lifecycle"]["gateway_ref"] = "45d5e7fdc45dc6bbf765b1c8e85af70a2d830d94"
+    assert findings_for(record) == []
+
+
+def test_unpinned_publish_record_still_validates() -> None:
+    """No publish-time enforcement: a release targeting no pin records fine."""
+    record = publish_record()
+    assert "gateway_ref" not in record["lifecycle"]
+    assert findings_for(record) == []
+
+
+def test_publish_record_records_firmware_attestation() -> None:
+    record = publish_record()
+    record["lifecycle"]["firmware_attestation"] = {
+        "vendor": "Exampleworks",
+        "manifest": "firmware/vendor.manifest",
+        "bytes": "vendor-distributed",
+        "files": ["firmware/blob.bin"],
+    }
+    assert findings_for(record) == []
+

@@ -105,6 +105,9 @@ uv run python scripts/validate_records.py
 uv run python scripts/generate_index.py --check
 ```
 
-The admission replay runs against a gateway checkout at the committed
-`gateway-ref` (advance the pin deliberately per train; the CI drift job warns
-when gateway main passes it).
+The registry STATES AND ADVERTISES (owner ruling, issue #223 rework): each
+publish record carries the `gateway_ref` it targets and the index advertises
+it; admission is NOT enforced at publish time — the client enforces at import
+(`scripts/replay_admission.py` verifies on demand against a gateway checkout
+at the recorded pin; the repo-level `gateway-ref` file advertises the lane's
+current default and the CI drift notice warns when gateway main passes it).

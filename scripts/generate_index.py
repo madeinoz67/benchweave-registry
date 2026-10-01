@@ -42,6 +42,20 @@ def _index_schema() -> jsonschema.Draft202012Validator:
     return _SCHEMA_CACHE
 
 
+def _publish_records(root: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
+    publishes: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for path in record_paths(root / "records"):
+        parsed = json.loads(path.read_bytes())
+        if parsed.get("record_type") != "lifecycle":
+            continue
+        lifecycle = parsed.get("lifecycle", {})
+        if lifecycle.get("op") != "publish":
+            continue
+        key = (lifecycle.get("publisher"), lifecycle.get("plugin"), lifecycle.get("version"))
+        publishes[key] = lifecycle
+    return publishes
+
+
 def _reviews(root: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     reviews: dict[tuple[str, str, str], dict[str, Any]] = {}
     for path in record_paths(root / "records"):
@@ -63,6 +77,7 @@ def _maintenance(status: dict[str, Any]) -> str:
 def generate(root: Path) -> bytes:
     """The canonical index bytes for the committed trees; pure and offline."""
     reviews = _reviews(root)
+    publishes = _publish_records(root)
     rows: list[dict[str, Any]] = []
     releases = root / "releases"
     if releases.is_dir():
@@ -81,6 +96,7 @@ def generate(root: Path) -> bytes:
                 status = json.loads((release_dir / "status.json").read_bytes())
             review_record = reviews.get((publisher, plugin, version), {})
             review = review_record.get("review", {})
+            publish = publishes.get((publisher, plugin, version), {})
             submission_path = (
                 root / "records" / "submissions" / publisher / plugin / version
                 / "artefacts" / "submission.json"
@@ -131,6 +147,8 @@ def generate(root: Path) -> bytes:
                     ),
                     "transport_triples": submission.get("transport_triples", []),
                     "source_revision": manifest.get("source", {}).get("revision", "0" * 40),
+                    "gateway_ref": publish.get("gateway_ref"),
+                    "firmware_attestation": publish.get("firmware_attestation"),
                     "unverified_markers": list(_UNVERIFIED_MARKERS),
                 }
             )

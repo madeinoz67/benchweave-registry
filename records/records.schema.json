@@ -328,6 +328,41 @@
               "minLength": 1
             }
           }
+        },
+        "gateway_ref": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+          "description": "The pinned gateway commit this release targets \u2014 RECORDED AND ADVERTISED, never enforced at publish time (owner ruling, issue #223 rework: the registry states and advertises; the client enforces at import time). Absent means the release records no pin; nothing refuses."
+        },
+        "firmware_attestation": {
+          "type": "object",
+          "required": [
+            "vendor",
+            "manifest"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "vendor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "manifest": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bytes": {
+              "const": "vendor-distributed"
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
+          },
+          "description": "CR-50, stated-not-enforced (owner ruling, issue #223 rework): the vendor attestation recorded for a firmware-carrying release; enforcement is the client decision. Bytes are vendor-distributed, never bundled."
         }
       }
     }

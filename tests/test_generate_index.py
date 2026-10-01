@@ -96,6 +96,9 @@ def test_row_carries_the_catalogue_and_styleguide_fields() -> None:
     assert row["kind"] == "admitted-release"
     assert row["signed"] is True
     assert "conformance-evidence-self-attested" in row["unverified_markers"]
+    # F1 rework: the pin is advertised, never enforced.
+    assert row["gateway_ref"] == "45d5e7fdc45dc6bbf765b1c8e85af70a2d830d94"
+    assert row["firmware_attestation"] is None
 
 
 def test_index_schema_validates_the_committed_index() -> None:

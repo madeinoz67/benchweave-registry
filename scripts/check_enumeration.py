@@ -1,4 +1,7 @@
-"""A2 three-way enumeration equality: docs == tool == schema.
+"""A2 three-way enumeration equality: docs == tool == schema (ON-DEMAND tool).
+
+Owner ruling (issue #223 rework): not a publish-time gate; run it when any
+of the three surfaces moves.
 
 The publishing docs' artefact list, the SDK packaging tool's
 REQUIRED_COMPONENTS, and the records schema's review.components enum must

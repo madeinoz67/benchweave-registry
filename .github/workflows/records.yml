@@ -1,5 +1,12 @@
 name: records
 
+# Owner ruling (issue #223 rework): the registry STATES AND ADVERTISES — it
+# does not enforce admission at publish time. The replay and enumeration jobs
+# are gone as publish-time gates; replay_admission.py and
+# check_enumeration.py stay committed as on-demand verification tools, and
+# each release RECORDS the pinned gateway version it targets (gateway_ref)
+# for clients to enforce at import time.
+
 on:
   push:
     branches: [main]
@@ -24,59 +31,6 @@ jobs:
         run: uv run python scripts/generate_index.py --check
       - name: Unit tests (validity arms)
         run: uv run pytest -q
-
-  replay:
-    # Q10: the authoritative admission replay runs in repo-of-record CI, at the
-    # committed gateway-ref pin (F5: a red replay means a bad submission, not
-    # gateway drift). A drift job below warns when gateway main advances.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Read the gateway pin
-        id: pin
-        run: echo "ref=$(cat gateway-ref)" >> "$GITHUB_OUTPUT"
-      - name: Checkout the gateway at the pinned ref
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: madeinoz67/benchweave
-          ref: ${{ steps.pin.outputs.ref }}
-          path: gateway
-          fetch-depth: 1
-      - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          python-version: "3.13"
-      - name: Admission replay through unmodified gateway admission (CR-13)
-        run: uv run --project gateway python scripts/replay_admission.py --gateway gateway
-
-  enumeration:
-    # A2: docs/tool/schema three-way enumeration equality. The gateway checkout
-    # at the pin carries the publishing docs and the SDK submodule (recursive).
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Read the gateway pin
-        id: pin
-        run: echo "ref=$(cat gateway-ref)" >> "$GITHUB_OUTPUT"
-      - name: Checkout the gateway at the pinned ref (with SDK submodule)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: madeinoz67/benchweave
-          ref: ${{ steps.pin.outputs.ref }}
-          path: gateway
-          submodules: recursive
-          fetch-depth: 1
-      - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          python-version: "3.13"
-      - name: Sync check environment
-        run: uv sync --locked
-      - name: Three-way enumeration equality (docs == tool == schema)
-        run: |
-          uv run python scripts/check_enumeration.py \
-            --docs gateway/docs/publishing-guide.md \
-            --sdk-module gateway/packages/sdk/src/benchweave_sdk/publishing.py
 
   drift:
     # The CON-12 staleness pattern: warn (not fail) when gateway main advances

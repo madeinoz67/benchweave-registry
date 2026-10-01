@@ -1,4 +1,9 @@
-"""Admission replay through unmodified gateway admission (Q10, CR-13).
+"""Admission replay through unmodified gateway admission (ON-DEMAND tool).
+
+Owner ruling (issue #223 rework): the registry states and advertises; the
+client enforces. This script is NOT a publish-time gate — it is the
+verification tool a client or reviewer runs to confirm a release admits
+through unmodified gateway admission at the recorded pin.
 
 Runs the gateway repository's own registry machinery — at the committed
 ``gateway-ref`` pin — over this repository's ``releases/`` tree with the
