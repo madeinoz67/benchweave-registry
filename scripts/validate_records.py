@@ -153,17 +153,14 @@ def validate_tree(root: Path) -> list[str]:
     # CR-35's releases half: no dev-prefixed origin or dependency lineage in
     # the published tree (the docstring's records-AND-releases claim, made
     # true here): a dev-unsigned origin under releases/ refuses.
-    for (publisher, plugin, version), manifest_path in sorted(manifests.items()):
+    for manifest_path in sorted(manifests.values()):
         manifest = json.loads(manifest_path.read_bytes())
+        rel = manifest_path.relative_to(releases_dir).as_posix()
         if str(manifest.get("registry_id", "")).startswith("dev-"):
-            findings.append(
-                f"dev_lineage_in_release:{manifest_path.relative_to(releases_dir).as_posix()}"
-            )
+            findings.append(f"dev_lineage_in_release:{rel}")
         for dep in manifest.get("dependencies", []):
             if str(dep.get("registry_id", "")).startswith("dev-"):
-                findings.append(
-                    f"dev_lineage_in_release:{manifest_path.relative_to(releases_dir).as_posix()}"
-                )
+                findings.append(f"dev_lineage_in_release:{rel}")
 
     for path, parsed in parsed_by_path.items():
         # CR-35's index half: no dev-prefixed registry id in any record.
@@ -180,13 +177,13 @@ def validate_tree(root: Path) -> list[str]:
             findings.append(f"closure_diff_absent:{path.name}")
             continue
         key = (lifecycle.get("publisher"), lifecycle.get("plugin"), lifecycle.get("version"))
-        manifest_path = manifests.get(key)
-        if manifest_path is None:
+        release_path: Path | None = manifests.get(key)
+        if release_path is None:
             findings.append(
                 f"publish_record_without_release:{path.name}: no manifest under releases/"
             )
             continue
-        manifest = json.loads(manifest_path.read_bytes())
+        manifest = json.loads(release_path.read_bytes())
         # CR-38: the sign-off names the closure digest actually published.
         expected = closure_digest_of_dependencies(manifest.get("dependencies", []))
         if lifecycle.get("closure_digest") != expected:
@@ -212,12 +209,12 @@ def validate_tree(root: Path) -> list[str]:
         block = manifest.get("review", {})
         if block.get("record_sha256") != sha256_hex(review_raw):
             findings.append(
-                f"review_record_digest_mismatch:{manifest_path.name}: review block pins "
+                f"review_record_digest_mismatch:{release_path.name}: review block pins "
                 f"{block.get('record_sha256')}, record digest is {sha256_hex(review_raw)}"
             )
         if block.get("outcome") != review.get("outcome"):
             findings.append(
-                f"review_outcome_mismatch:{manifest_path.name}: manifest review block says "
+                f"review_outcome_mismatch:{release_path.name}: manifest review block says "
                 f"{block.get('outcome')}, record says {review.get('outcome')}"
             )
     return findings
