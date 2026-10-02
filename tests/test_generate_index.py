@@ -262,3 +262,24 @@ def test_records_edit_without_regeneration_refuses(tmp_path: Path) -> None:
     check = _run("--check", "--root", str(root))
     assert check.returncode == 1, check.stdout + check.stderr
     assert "index_drift" in check.stderr
+
+
+def test_a_submitted_not_accepted_submission_produces_no_index_row(tmp_path: Path) -> None:
+    """B3's generator arm (CR-22): a submission that has not been accepted
+    and published is structurally absent from the catalogue — the index is
+    generated from releases/ only, and a submission becomes a release at
+    publish. The control arm (the same package WITH a release) proves the
+    test is not vacuous: the generator can and does produce rows."""
+    root = tmp_path / "repo"
+    submission = (
+        root / "records" / "submissions" / "northwind-instruments" / "gamma-tool" / "1.0.0"
+    )
+    submission.mkdir(parents=True)
+    (submission / "review-1.json").write_text(
+        json.dumps({"record_type": "review"}), encoding="utf-8"
+    )
+    assert _row_ids(root) == [], "a submission without a release must not index"
+
+    # control: the same package, now published (a release directory exists)
+    _fixture_release(root, plugin="gamma-tool")
+    assert _row_ids(root) == ["northwind-instruments/gamma-tool"]
