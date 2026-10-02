@@ -171,22 +171,13 @@
   /* Catalogue meta line (issue #224) */
   .catalogue-meta { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
 
-  /* Records table (issue #224 follow-on — registry-authored, pending gateway adoption) */
+  /* Records table + record page (issue #224 follow-on — registry catalogue) */
   .bw-records { width: 100%; border-collapse: collapse; font-size: 14px; }
   .bw-records th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text-muted); text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
-  .bw-records td { padding: 14px 12px; border-bottom: 1px solid var(--border); vertical-align: top; text-align: left; }
-  .sig { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
-  .sig-signed { color: var(--text); font-weight: 500; }
-  .sig-unsigned { color: var(--text-muted); }
-  .release-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--text); text-decoration: none; }
-  .cap-line { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--amber); }
-
-  /* Record page (issue #224 follow-on — registry-authored, pending gateway adoption) */
-  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-muted); }
-  .record-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; align-items: start; }
-  .record-main th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text-muted); text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; width: 240px; vertical-align: top; }
-  .aside-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-elevated); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
-  .open-files-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: var(--radius-sm); background: var(--amber-solid); color: var(--amber-on); font-weight: 600; font-size: 14px; text-decoration: none; }
+  .bw-records td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .bw-records tr.bw-detail-row > td { background: var(--bg-inset); }
+  .record-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; }
+  .record-grid section h3, .record-grid aside h3 { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
 
   /* Table */
   table.gd-map { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -240,7 +231,7 @@
       <li>Copy the logo SVG paths below verbatim. Don't regenerate, "improve," or approximate the mark — a slightly different hexagon or weave crossing on the next run is a broken brand, not a refinement.</li>
       <li>Fonts are exactly Space Grotesk (display), IBM Plex Sans (body), IBM Plex Mono (code, data, versions). No substitutions, no adding a fourth family, no swapping weights not shown in the type scale.</li>
       <li>Trace Amber and Signal Blue are the only accents. Verified Green and Alert Red are semantic-only — success/danger states, never decorative.</li>
-      <li>Solid hex = gateway. Dashed hex = SDK. Stack-glyph hex = registry, tag-glyph hex = standards — both not built yet, don't ship either until told that property is real.</li>
+      <li>Solid hex = gateway. Dashed hex = SDK. Stack-glyph hex = registry (deployed on the registry catalogue since 2026-10-03), tag-glyph hex = standards — not built yet, don't ship until told that property is real.</li>
     </ul>
 
     <h3>Logo — copy exactly</h3>
@@ -364,15 +355,38 @@
     </div>
     <p class="note" style="margin-top:10px;">The registry-served catalogue's per-card identity run (issue #224): publisher · licence · maintenance in mono 13px. Values are always machine-rendered from the served index — never hand-typed — and absent values render as an explicit "none", never as a guess.</p>
 
-    <h3>Records table <span class="badge badge-info">registry-authored · pending gateway adoption</span></h3>
-    <p class="note" style="margin-bottom:10px;">Declared in the registry's vendored copy by the #224 follow-on (records table + drill-down); the gateway repo remains the authored authority — this declaration converges by re-copy repin when the gateway PR lands.</p>
-    <div class="code-block" style="max-width:720px;"><span class="muted">/* the eight columns */</span><br>Signature · Release · Publisher · Evidence · Declared capabilities · Maintenance · Advisories · Compatibility
-<span class="muted">/* shape */</span><br>.bw-records — border-collapse table, 14px body, mono 12px muted th run,<br>td padding 14px 12px on --border rules, vertical-align top;<br>signature cell icon+text .sig (13px, never icon-only);<br>release name .release-name Space Grotesk 600 15px;<br>capability lines .cap-line 13px on --amber;</div>
-    <p class="note" style="margin-top:10px;">The catalogue's records table (issue #224 follow-on): eight columns, live caption, kind badge inside the Release cell, tone remapping (evidence passed = neutral inset / partial = warning / failed = danger; maintenance maintained + maintenance-only = neutral inset, unmaintained = warning, unknown = muted outline). Page width 1280px; the type scale is the mockup's (h1 40px). Versions and compatibility stamp statically in rows — machine-rendered from the served index, never hand-typed.</p>
+    <h3>Records table <span class="badge badge-version">v0.2</span></h3>
+    <div class="table-scroll" style="max-width:880px;">
+      <table class="bw-records">
+        <thead><tr>
+          <th scope="col">Signature</th><th scope="col">Release</th><th scope="col">Publisher</th><th scope="col">Evidence</th><th scope="col">Declared capabilities</th><th scope="col">Maintenance</th><th scope="col">Advisories</th><th scope="col">Compatibility</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="sig-cell">✍ Signed</span></td>
+            <td><strong>Northwind PSU driver</strong><br><span class="mono" style="font-size:12px;color:var(--text-muted)">northwind-psu · 0.1.0 · admitted release</span></td>
+            <td class="mono" style="font-size:12.5px">northwind-instruments</td>
+            <td><span class="badge">simulated · passed</span></td>
+            <td><span class="mono" style="font-size:12px;color:var(--text-muted)">globe network egress</span></td>
+            <td><span class="badge badge-success">maintained</span></td>
+            <td><span class="mono" style="font-size:12px;color:var(--text-muted)">none</span></td>
+            <td class="mono" style="font-size:12px;color:var(--text-muted)">OTDP 0.2.2 · adapter 1.1 · STG 1.5</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="margin-top:10px;">The registry-served catalogue's records view (issue #224 follow-on): mono 12px muted column labels, one <code>&lt;tr&gt;</code> per release, sentence-case values. The Signature cell is icon plus visible text, never icon-only, with a provenance-not-quality <code>title</code>; the kind badge renders in the Release cell; version and compatibility stamp statically from the served index. Wraps in an <code>overflow-x</code> scroll wrapper on narrow viewports.</p>
 
-    <h3>Record page <span class="badge badge-info">registry-authored · pending gateway adoption</span></h3>
-    <div class="code-block" style="max-width:720px;"><span class="muted">/* layout */</span><br>.record-grid — minmax(0,1fr) + 340px aside, 40px gap;<br>.breadcrumb — 14px muted run, mono segments;<br>.aside-card — --bg-elevated card, --radius-md, 18px 20px padding;<br>.open-files-button — 44px amber solid button (--amber-solid / --amber-on);<br>provenance/evidence/compatibility tables — mono 12px muted th at 240px.</div>
-    <p class="note" style="margin-top:10px;">The standalone drill-down page (one per release, five directories under the site root): every field rendered or explicitly none — provenance join fields (vetted date, key-validity window, protections) come from the registry's publisher records; the signature line is proven, not decorative (generation-time verification); downloads link raw at the stamped commit. No external JS on the page.</p>
+    <h3>Record page <span class="badge badge-version">v0.2</span></h3>
+    <div class="spec-card" style="max-width:880px;">
+      <div class="spec-card-head">
+        <h4>Northwind PSU driver <span class="mono" style="font-size:12px;color:var(--text-muted)">northwind-psu@0.1.0</span></h4>
+        <span class="badge badge-version">0.1.0</span> <span class="badge">admitted release</span> <span class="badge badge-success">Signed by northwind-instruments</span>
+      </div>
+      <p>Bench power supply driver with scalar reads and a snapshot profile.</p>
+      <p class="catalogue-meta">vetted 2026-10-01 · key validity 2026-01-01 to 2030-01-01 · <span class="mono">sha256 e81ef419…</span></p>
+    </div>
+    <p class="note" style="margin-top:10px;">The registry-served record detail (issue #224 follow-on): breadcrumb, badge row, two-column grid of sections (Provenance, Evidence, Compatibility, Declared capabilities, Unverified markers) with an aside of cards (Admission, Open release files, Status, Publisher repository). Full digests render untruncated in mono with copy buttons; absent values render as an explicit "none". The admission notice is fixed prose: publication is not authorization.</p>
   </section>
 
   <section id="ambient">
@@ -510,7 +524,7 @@
     <h3>Sub-brands</h3>
     <p class="section-desc" style="margin-bottom:16px;">Properties that would be genuinely separate from the gateway if they ship as their own thing — different repo or different domain, different audience, someone can land there with zero other context. Same mark, same two colors, always. What changes is deliberately small and means something specific each time.</p>
     <div class="swatch" style="padding:22px 24px; margin-bottom:18px;">
-      <p style="margin:0 0 10px; font-size:14px; color:var(--text-muted);"><strong style="color:var(--text);">Registry isn't here yet</strong> — the contract page inside Standards doesn't need its own mark today. This variant is prepared for if/when a hosted registry ships as its own service (a real <code class="mono">registry.benchweave.dev</code> that plugin authors publish to) — publishers rather than readers, same case as SDK.</p>
+      <p style="margin:0 0 10px; font-size:14px; color:var(--text-muted);"><strong style="color:var(--text);">Registry is live on its own domain</strong> — the registry catalogue serves at <code class="mono">registry.benchweave.dev</code> (owner cutover 2026-10-02; the mark shipped there 2026-10-03 by owner decision). What exists today is the catalogue of the git-native repository of record — readers, not publishers. The prepared-for case this variant anticipated — plugin authors publishing <em>to</em> a hosted registry service — remains future; the words on the site claim no hosted service until one exists.</p>
       <p style="margin:0; font-size:14px; color:var(--text-muted);"><strong style="color:var(--text);">Standards isn't external yet</strong> — right now it's pages inside the main site's nav, and the page title already says where you are. This variant is prepared for if/when the contracts move to their own domain (a spec site implementers reference independent of the gateway) — a reader who's never touched benchweave.dev could land straight on a contract page.</p>
     </div>
     <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px;">
@@ -546,7 +560,7 @@
           <span style="font-family:var(--font-display); font-weight:600; font-size:14px; color:#ECEFEE;">BenchWeave</span>
           <span class="mono" style="font-size:10px; color:#1B2027; background:#FFB020; padding:1.5px 5px; border-radius:999px; font-weight:600;">Registry</span>
         </div>
-        <div class="mono" style="font-size:10.5px; color:#A7B0B8; text-align:center; padding:0 10px;">not yet built<br>solid hex · stack glyph</div>
+        <div class="mono" style="font-size:10.5px; color:#A7B0B8; text-align:center; padding:0 10px;">live on registry.benchweave.dev<br>solid hex · stack glyph</div>
       </div>
       <div class="swatch" style="padding:26px 0; display:flex; flex-direction:column; align-items:center; gap:11px; background:#1B2027;">
         <svg width="52" height="52" viewBox="0 0 24 24" fill="none">

@@ -1,17 +1,7 @@
 {
-  "comment": "Digest pin for the vendored public-site styleguide (the gateway repo remains the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). DIVERGENCE recorded 2026-10-02 by the #224 follow-on (records table + drill-down): the Records table and Record page component declarations are REGISTRY-AUTHORED additions in this copy, pending the gateway's authored adoption — a re-copy repin converges this vendor with gateway main when that PR lands (the base bytes outside the added sections remain the 635e5b9 re-copy).",
-  "source": "madeinoz67/benchweave@635e5b9:docs/internal/public-site-styleguide.html",
-  "sha256": "1af91d814c22a835cfc31037290391e564132f473eae4292ae43a5b0829c06f5",
+  "comment": "Digest pin for the vendored public-site styleguide (the gateway repo remains the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). CONVERGENCE re-copy 2026-10-03: gateway PR #350 adopted the records-table/record-page CSS declarations AND fired the Registry sub-brand (owner decision \u2014 live header); this vendor re-copied those bytes, recomputed sha256 and updated source together. The cited commit is #350's tip \u2014 durable as a main commit once #350 merges (merge order: #350 first, this PR second). The interim registry-authored divergence block is deleted.",
+  "source": "madeinoz67/benchweave@ba42dd0:docs/internal/public-site-styleguide.html",
+  "sha256": "bfefa38e421ab8800dd80afa3f7a2ccfcc87bf8c1894e6b3354900ca388728e4",
   "vendored_path": "vendored/gateway/public-site-styleguide.html",
-  "pinned_date": "2026-10-02",
-  "divergence": {
-    "recorded": "2026-10-02",
-    "sections": [
-      "Records table",
-      "Record page"
-    ],
-    "authored": "benchweave-registry (issue #224 follow-on)",
-    "base": "madeinoz67/benchweave@635e5b9:docs/internal/public-site-styleguide.html",
-    "converges": "re-copy repin after the gateway's authored adoption PR"
-  }
+  "pinned_date": "2026-10-02"
 }
