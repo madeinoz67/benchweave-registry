@@ -1,0 +1,49 @@
+name: records
+
+# Owner ruling (issue #223 rework): the registry STATES AND ADVERTISES — it
+# does not enforce admission at publish time. The replay and enumeration jobs
+# are gone as publish-time gates; replay_admission.py and
+# check_enumeration.py stay committed as on-demand verification tools, and
+# each release RECORDS the pinned gateway version it targets (gateway_ref)
+# for clients to enforce at import time.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.13"
+      - name: Sync environment
+        run: uv sync --locked
+      - name: Records validity (CR-9/10/56/60, CR-38, CR-35)
+        run: uv run python scripts/validate_records.py
+      - name: Index regeneration check (CR-21)
+        run: uv run python scripts/generate_index.py --check
+      - name: Unit tests (validity arms)
+        run: uv run pytest -q
+
+  drift:
+    # The CON-12 staleness pattern: warn (not fail) when gateway main advances
+    # past the pin — the pin advances deliberately per train.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Gateway drift notice
+        run: |
+          PINNED="$(cat gateway-ref)"
+          LATEST="$(git ls-remote https://github.com/madeinoz67/benchweave.git refs/heads/main | cut -f1)"
+          if [ "$PINNED" != "$LATEST" ]; then
+            echo "::warning::gateway-ref pin $PINNED is behind main $LATEST — advance the pin deliberately on the next train"
+          else
+            echo "gateway-ref pin is current: $PINNED"
+          fi
