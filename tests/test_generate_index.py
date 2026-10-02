@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 GENERATOR = REPO / "scripts" / "generate_index.py"
 
@@ -283,3 +285,120 @@ def test_a_submitted_not_accepted_submission_produces_no_index_row(tmp_path: Pat
     # control: the same package, now published (a release directory exists)
     _fixture_release(root, plugin="gamma-tool")
     assert _row_ids(root) == ["northwind-instruments/gamma-tool"]
+
+
+# ── the yank arm, hardened (issue #224 slice-2 pivot, §3.2) ───────────────────
+#
+# The 11-value boundary matrix the refute lanes executed as repros, as a
+# standing arm: out-of-enum lifecycle REFUSES (fail-closed polarity — the
+# pre-pivot generator kept the row, the exact HIGH the lanes flagged);
+# malformed or non-object status refuses with a TYPED prefix (no bare
+# tracebacks); enum values keep their settled polarity (yanked/revoked drop
+# the row; published/deprecated/absent keep it). The enum itself is the
+# vendored schema's, never a hand list. Two arms beyond the named eleven
+# are disclosed in place.
+
+
+def _status_bytes(case: str) -> bytes | None:
+    """The status.json bytes for a matrix row (None = no file)."""
+    if case == "absent":
+        return None
+    if case == "malformed":
+        return b"not json at all"
+    if case == "non-object":
+        return b'["yanked"]'
+    if case == "key-absent":
+        # Beyond the named eleven: a present status document whose lifecycle
+        # key is missing. Fail-closed here too — a present-but-unreadable
+        # lifecycle is not an absent one (the validity step owns the schema
+        # shape; the generator refuses rather than guessing benign).
+        return json.dumps({"reason": "lifecycle key absent"}).encode()
+    if case == "null":
+        return json.dumps({"lifecycle": None}).encode()
+    if case == "array":
+        return json.dumps({"lifecycle": ["yanked"]}).encode()
+    return json.dumps({"lifecycle": case}).encode()
+
+
+@pytest.mark.parametrize(
+    ("case", "polarity"),
+    [
+        # the settled rows (existing behaviour, now pinned by the matrix)
+        ("yanked", "drop"),
+        ("revoked", "drop"),
+        ("published", "keep"),
+        ("deprecated", "keep"),
+        ("absent", "keep"),
+        # present-but-out-of-enum REFUSES (the polarity flip)
+        ("Yanked", "refuse-invalid"),
+        ("yank", "refuse-invalid"),
+        ("retired", "refuse-invalid"),
+        ("null", "refuse-invalid"),
+        ("array", "refuse-invalid"),
+        ("key-absent", "refuse-invalid"),
+        # unparseable authority refuses with a typed prefix
+        ("malformed", "refuse-unparseable"),
+        ("non-object", "refuse-unparseable"),
+    ],
+)
+def test_status_boundary_matrix(case: str, polarity: str, tmp_path: Path) -> None:
+    """The fail-closed polarity per row, exactly as the design record §3.2
+    names it: `index_status_invalid: <value>` for a present lifecycle
+    outside the enum; `index_status_unparseable:` for a status document
+    that is not parseable JSON or not an object; the row kept for an
+    absent document (today's dogfood, unchanged); the row dropped for
+    yanked/revoked (CR-25)."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    release = _fixture_release(root)
+    status_bytes = _status_bytes(case)
+    if status_bytes is not None:
+        (release / "status.json").write_bytes(status_bytes)
+    result = _run("--root", str(root))
+    if polarity == "keep":
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert _row_ids(root) == ["northwind-instruments/alpha-tool"], case
+        return
+    if polarity == "drop":
+        assert result.returncode == 0, f"{case}: {result.stdout + result.stderr}"
+        assert _row_ids(root) == [], case
+        return
+    assert result.returncode == 1, f"{case}: expected a refusal, generator succeeded"
+    stderr = result.stderr
+    prefix = "index_status_invalid:" if polarity == "refuse-invalid" else (
+        "index_status_unparseable:"
+    )
+    assert prefix in stderr, f"{case}: refusal lacks {prefix!r}; stderr:\n{stderr}"
+    assert "Traceback" not in stderr, f"{case}: bare traceback instead of a typed refusal"
+
+
+def test_the_enum_is_derived_from_the_vendored_schema() -> None:
+    """The generator's lifecycle enum is the vendored release-status
+    schema's own enum — one authority, two consumers (the validity step is
+    the other). A hand-listed tuple here would be a second constant the
+    design record explicitly refuses."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    try:
+        import generate_index
+    finally:
+        sys.path.remove(str(REPO / "scripts"))
+    schema = json.loads(
+        (REPO / "vendored" / "gateway" / "release-status.schema.json").read_bytes()
+    )
+    assert list(generate_index.LIFECYCLE_ENUM) == schema["properties"]["lifecycle"]["enum"]
+
+
+def test_out_of_enum_status_does_not_take_the_whole_run_down(tmp_path: Path) -> None:
+    """A bad status document on ONE release refuses that run loudly, and a
+    sibling release with valid state is not silently half-indexed: the
+    refusal is terminal (exit 1), never a partial index."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    _fixture_release(root, plugin="beta-tool")
+    bad = _fixture_release(root, plugin="alpha-tool")
+    (bad / "status.json").write_bytes(json.dumps({"lifecycle": "retired"}).encode())
+    result = _run("--root", str(root))
+    assert result.returncode == 1
+    assert "index_status_invalid:'retired'" in result.stderr
+    assert "northwind-instruments/alpha-tool" in result.stderr, "the refusal must name the row"
+    assert not (root / "index.json").exists(), "a refused run must write no index"
