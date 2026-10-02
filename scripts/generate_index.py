@@ -117,7 +117,20 @@ def generate(root: Path) -> bytes:
                     )
                     continue
             release_dir = manifest_path.parent
-            status: dict[str, Any] = {}
+            # The status document is the single authority for lifecycle and
+            # advisories (Q8: origin status/lifecycle files remain the
+            # mechanism — the same served state file stock gateways consult).
+            # Yank arm (issue #224 slice 2, CR-25): lifecycle yanked or
+            # revoked DROPS the row — discovery must not offer what admission
+            # already refuses; the record and git history retain it. Absent
+            # status.json or lifecycle published|deprecated keeps the row
+            # (the dogfood's shape, unchanged). Zero format motion.
+            status_path = release_dir / "status.json"
+            status: dict[str, Any] = (
+                json.loads(status_path.read_bytes()) if status_path.is_file() else {}
+            )
+            if status.get("lifecycle") in ("yanked", "revoked"):
+                continue
             review_record = reviews.get((publisher, plugin, version), {})
             review = review_record.get("review", {})
             publish = publishes.get((publisher, plugin, version), {})
