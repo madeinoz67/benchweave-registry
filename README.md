@@ -59,6 +59,37 @@ alone: no gateway repository, no PR thread, no running service (S3/A3).
    (`scripts/replay_admission.py` is the on-demand verification tool, not a
    publish-time gate).
 
+## Keeping the gateway catalogue in sync (manual, issue #224)
+
+The website's plugins panel renders from a **committed mirror** of this
+repository's generated `index.json` (`website/plugins-index.json` in the
+gateway repository), pinned to the registry commit it was synced from
+(`website/plugins-index.ref`). The sync is **manual-only** (owner ruling
+2026-10-02 — no bot PRs, no cross-repo token): after a records change
+lands here, a maintainer with both repositories runs three commands and
+opens the ordinary gateway PR:
+
+```sh
+# in a checkout of this repository, at the commit to sync from
+uv run python scripts/generate_index.py --check    # the registry tree is current
+cp index.json <gateway>/website/plugins-index.json
+printf '%s\n' "$(git rev-parse HEAD)" > <gateway>/website/plugins-index.ref
+python <gateway>/scripts/website/render_plugins_panel.py --root <gateway> --write
+```
+
+Then commit the three files (`plugins-index.json`, `plugins-index.ref`, the
+regenerated panel block in `website/index.html`) in the gateway repository
+and open the PR — never hand-edit any of them. The `sync-index` workflow
+(`workflow_dispatch`) computes the same triple and either certifies
+lockstep or fails `sync_required:` with a downloadable bundle.
+
+Until a sync lands, the drift gates stay red on purpose — that red is the
+honest intermediate, not an outage: `mirror-drift` here (push to main),
+plus the gateway's render guard (`panel_drift:`) and authority pin
+(`mirror_authority_drift:`). A yanked or revoked release drops out of the
+index at the next regeneration (CR-25) and out of the catalogue at the
+next sync; the record and git history retain it.
+
 ## Family conventions
 
 Agent working rules, the memory protocol (`registry` tag), the tracker's
