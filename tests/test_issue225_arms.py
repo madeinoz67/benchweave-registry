@@ -293,3 +293,318 @@ def test_similarity_vectors_are_pinned_by_the_truth_table() -> None:
     table = json.loads((FIXTURES / "namespace-vetting.truth-table.json").read_bytes())
     inputs = {row["input"] for row in table["rows"] if row["surface"] == "similarity-rule"}
     assert len(inputs) == len(vectors) == 5
+
+
+# ── gate arms: the tree-level validity checks (design §2.4) ───────────────────
+#
+# Every arm builds a minimal self-contained tree: the fixture publishers
+# (northwind-instruments / harborline-systems, both vetted) + the vetting
+# checklist + whatever records and release documents the arm names.
+
+
+def _gate_tree(tmp_path: Path) -> Path:
+    root = tmp_path / "repo"
+    (root / "records").mkdir(parents=True)
+    (root / "records" / "publishers.json").write_bytes(
+        (FIXTURES / "queue-records" / "records" / "publishers.json").read_bytes()
+    )
+    (root / "vetting-checklist.md").write_bytes((REPO / "vetting-checklist.md").read_bytes())
+    (root / "lane-rules.json").write_bytes((REPO / "lane-rules.json").read_bytes())
+    return root
+
+
+def _plant(root: Path, record: dict[str, Any]) -> None:
+    lc = record.get("lifecycle") or record.get("review", {})
+    sub = "lifecycle" if record.get("record_type") == "lifecycle" else "submissions"
+    seq = "1"
+    target = root / "records" / sub / lc["publisher"] / lc["plugin"] / lc["version"]
+    target.mkdir(parents=True, exist_ok=True)
+    (target / f"{seq}-{lc.get('op', 'review')}.json").write_bytes(
+        vr.canonical_bytes(record)
+    )
+
+
+def _release(root: Path, publisher: str, plugin: str, version: str,
+             status: dict[str, Any] | None = None) -> Path:
+    release = root / "releases" / "benchweave-registry" / publisher / plugin / version
+    release.mkdir(parents=True, exist_ok=True)
+    (release / "manifest.json").write_bytes(
+        vr.canonical_bytes(
+            {
+                "registry_id": "benchweave-registry",
+                "package_id": f"{publisher}/{plugin}",
+                "version": version,
+                "publisher_id": publisher,
+            }
+        )
+    )
+    if status is not None:
+        (release / "status.json").write_bytes(vr.canonical_bytes(status))
+    return release
+
+
+def _findings(root: Path) -> list[str]:
+    return vr.validate_tree(root)
+
+
+# --- the namespace arm (CR-15/16/39, records-side) ------------------------------
+
+
+def test_unvetted_publisher_record_is_refused(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, review_record(publisher="driftwood-labs", plugin="widget"))
+    findings = _findings(root)
+    assert any(f.startswith("publisher_unvetted:") for f in findings), findings
+
+
+def test_reserved_namespace_exact_is_refused_at_vetting(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant_publishers_entry(root, "stg-mirror", "stg")
+    findings = _findings(root)
+    assert any(f.startswith("namespace_reserved:") for f in findings), findings
+
+
+def test_reserved_namespace_extension_is_refused_at_vetting(tmp_path: Path) -> None:
+    """The lane-rules vector's reading: 'otdp-tools' extends the reserved
+    'otdp' — a candidate near a RESERVED name is reserved, not lookalike."""
+    root = _gate_tree(tmp_path)
+    _plant_publishers_entry(root, "otdp-tools", "otdp-tools")
+    findings = _findings(root)
+    assert any(f.startswith("namespace_reserved:") for f in findings), findings
+
+
+def test_lookalike_namespace_is_refused_at_vetting(tmp_path: Path) -> None:
+    """Vetting REFUSES where package-time only flags (CR-39): a namespace
+    near an existing vetted namespace never admits."""
+    root = _gate_tree(tmp_path)
+    _plant_publishers_entry(root, "northwind-instrumentz", "northwind-instrumentz")
+    findings = _findings(root)
+    assert any(f.startswith("namespace_lookalike:") for f in findings), findings
+
+
+def test_duplicate_namespace_claim_is_a_collision(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant_publishers_entry(root, "harborline-mirror", "harborline-systems")
+    findings = _findings(root)
+    assert any(f.startswith("namespace_collision:") for f in findings), findings
+
+
+def test_reserved_plugin_name_record_is_refused(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    record = publish_record(publisher="northwind-instruments", plugin="sim-psu")
+    record["record_version"] = "1.1.0"
+    _plant(root, record)
+    findings = _findings(root)
+    assert any(f.startswith("namespace_reserved:") for f in findings), findings
+
+
+def test_vetted_fixture_publishers_pass(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    assert _findings(root) == []
+
+
+def _plant_publishers_entry(root: Path, publisher_id: str, namespace: str) -> None:
+    document = json.loads((root / "records" / "publishers.json").read_bytes())
+    document["publishers"].append(
+        vetted_entry(publisher_id, namespace)
+    )
+    (root / "records" / "publishers.json").write_bytes(vr.canonical_bytes(document))
+
+
+# --- the vetting-citation arm ----------------------------------------------------
+
+
+def test_unknown_vetting_row_is_refused(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    entry = vetted_entry("kestrel-devices", "kestrel-devices")
+    entry["vetting"]["cited_rows"] = ["V-01", "V-99"]
+    _plant_publishers_entry_full(root, entry)
+    findings = _findings(root)
+    assert any(f.startswith("vetting_row_unknown:") for f in findings), findings
+
+
+def test_missing_checklist_file_is_refused(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    (root / "vetting-checklist.md").unlink()
+    findings = _findings(root)
+    assert any(f.startswith("vetting_checklist_absent:") for f in findings), findings
+
+
+def _plant_publishers_entry_full(root: Path, entry: dict[str, Any]) -> None:
+    document = json.loads((root / "records" / "publishers.json").read_bytes())
+    document["publishers"].append(entry)
+    (root / "records" / "publishers.json").write_bytes(vr.canonical_bytes(document))
+
+
+# --- the lifecycle pair checks (§2.3) ---------------------------------------------
+
+
+def test_yank_without_governing_status_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0")
+    _plant(root, lifecycle_record(
+        "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 2},
+    ))
+    findings = _findings(root)
+    assert any(f.startswith("yank_status_absent:") for f in findings), findings
+
+
+def test_yanked_status_without_a_yank_record_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "yanked", "sequence": 2})
+    findings = _findings(root)
+    assert any(f.startswith("status_yank_unrecorded:") for f in findings), findings
+
+
+def test_coherent_yank_passes(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "yanked", "sequence": 2})
+    _plant(root, lifecycle_record(
+        "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 2},
+    ))
+    assert _findings(root) == []
+
+
+def test_yank_sequence_mismatch_refuses(tmp_path: Path) -> None:
+    """The record cites the status revision it corresponds to; a stale
+    sequence number does not govern the served document."""
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "yanked", "sequence": 4})
+    _plant(root, lifecycle_record(
+        "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 2},
+    ))
+    findings = _findings(root)
+    assert any(f.startswith("yank_status_sequence_mismatch:") for f in findings), findings
+
+
+def test_advisory_absent_from_served_status_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "published", "sequence": 2, "advisories": [
+                 {"id": "BW-ADV-OTHER", "severity": "low",
+                  "summary": "s", "url": "https://example.invalid/a"}
+             ]})
+    _plant(root, lifecycle_record(
+        "advisory", publisher="northwind-instruments", plugin="alpha-tool",
+        version="1.0.0",
+        extra={"advisory": {
+            "id": "BW-ADV-001", "severity": "medium",
+            "summary": "s", "url": "https://example.invalid/b",
+        }},
+    ))
+    findings = _findings(root)
+    assert any(f.startswith("advisory_status_absent:") for f in findings), findings
+
+
+def test_advisory_present_in_served_status_passes(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "published", "sequence": 2, "advisories": [
+                 {"id": "BW-ADV-001", "severity": "medium",
+                  "summary": "s", "url": "https://example.invalid/b"}
+             ]})
+    _plant(root, lifecycle_record(
+        "advisory", publisher="northwind-instruments", plugin="alpha-tool",
+        version="1.0.0",
+        extra={"advisory": {
+            "id": "BW-ADV-001", "severity": "medium",
+            "summary": "s", "url": "https://example.invalid/b",
+        }},
+    ))
+    assert _findings(root) == []
+
+
+# --- the withdraw arm (CR-32) ------------------------------------------------------
+
+
+def test_withdraw_after_publication_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "beta-tool", "1.0.0")
+    publish = publish_record(
+        publisher="northwind-instruments", plugin="beta-tool", version="1.0.0"
+    )
+    publish["record_version"] = "1.1.0"
+    _plant(root, publish)
+    _plant(root, lifecycle_record(
+        "withdraw", publisher="northwind-instruments", plugin="beta-tool", version="1.0.0",
+    ))
+    findings = _findings(root)
+    assert any(f.startswith("withdraw_after_publication:") for f in findings), findings
+
+
+def test_pre_acceptance_withdraw_passes(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, lifecycle_record(
+        "withdraw", publisher="northwind-instruments", plugin="beta-tool", version="1.0.0",
+    ))
+    assert _findings(root) == []
+
+
+# --- the transfer arm (CR-17/Q9) ----------------------------------------------------
+
+
+def _transfer_record(extra_transfer: dict[str, Any] | None = None) -> dict[str, Any]:
+    block = {
+        "from_publisher": "northwind-instruments",
+        "to_publisher": "harborline-systems",
+        "consents": ["northwind-instruments", "harborline-systems"],
+        "vetting_reference": "publishers.json#harborline-systems",
+    }
+    if extra_transfer:
+        block.update(extra_transfer)
+    return lifecycle_record(
+        "transfer", publisher="northwind-instruments", plugin="gamma-tool",
+        version="1.0.0", extra={"transfer": block},
+    )
+
+
+def test_transfer_to_unvetted_receiver_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, _transfer_record({"to_publisher": "driftwood-labs"}))
+    findings = _findings(root)
+    assert any(f.startswith("transfer_receiver_unvetted:") for f in findings), findings
+
+
+def test_transfer_with_unresolved_vetting_reference_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, _transfer_record({"vetting_reference": "vetting/2024-09.pdf"}))
+    findings = _findings(root)
+    assert any(f.startswith("transfer_vetting_unresolved:") for f in findings), findings
+
+
+def test_transfer_without_both_consents_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, _transfer_record({"consents": ["northwind-instruments"]}))
+    findings = _findings(root)
+    assert any(f.startswith("transfer_consents_incomplete:") for f in findings), findings
+
+
+def test_coherent_transfer_passes(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, _transfer_record())
+    assert _findings(root) == []
+
+
+# --- the similarity rule's committed vectors (twin-test discipline) -----------------
+
+
+def test_similarity_vectors_hold_under_the_committed_rule() -> None:
+    """The five lane-rules vectors, each run against the comparison set its
+    expected label types (the truth table's disclosed reading)."""
+    table = json.loads((FIXTURES / "namespace-vetting.truth-table.json").read_bytes())
+    rows = {row["input"]: row for row in table["rows"]
+            if row["surface"] == "similarity-rule"}
+    for vector in json.loads((REPO / "lane-rules.json").read_bytes())["similarity_rule"]["vectors"]:
+        key = next(k for k in rows if k.startswith(vector["candidate"] + " "))
+        row = rows[key]
+        verdict = vr.namespace_verdict(
+            vector["candidate"], vector["existing"],
+            reserved=row["comparison_set"] == "reserved",
+        )
+        assert verdict == row["expected"], (vector, verdict, row["expected"])
