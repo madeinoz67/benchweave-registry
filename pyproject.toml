@@ -5,7 +5,7 @@ description = "Records-validity and admission-replay checks for the BenchWeave r
 requires-python = ">=3.13"
 dependencies = [
     "jsonschema[format]==4.26.0",
-    "cryptography==45.0.7",
+    "cryptography==50.0.0",
 ]
 
 [dependency-groups]
