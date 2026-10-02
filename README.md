@@ -55,7 +55,11 @@ alone: no gateway repository, no PR thread, no running service (S3/A3).
    the maintainer-custodied key (`scripts/registry/sign_release.py` in the
    gateway repository). The review block rides inside the signed manifest
    (registry standard 0.1.2; Q2) — one signature attests release and review
-   together.
+   together. Review records are schema-strict — author them from
+   `records/records.schema.json`, not from prose: the 14-key review block
+   (including `platform_findings` with `minItems: 1` and the CR-1
+   ten-component set), `cited_failures` required on a changes-requested
+   outcome, and the execution-model disclosure verbatim.
 4. The release RECORDS the pinned gateway version it targets
    (`gateway_ref` on the publish record, advertised in the index) — the
    registry states and advertises; the CLIENT enforces at import time
