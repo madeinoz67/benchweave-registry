@@ -1,0 +1,87 @@
+name: pages
+
+# The registry-hosted catalogue's deploy (issue #224 slice-2 pivot, §3.1).
+#
+# Posture (named, per the mechanism critic's Q8):
+# - builds from MAIN ONLY — a PR never deploys;
+# - the deploy job DEPENDS ON the validity job — a red validity never
+#   deploys (records validity + release-status validity + index --check +
+#   the unit suite, the same steps as records.yml);
+# - the page is generated AT DEPLOY TIME from freshly generated index
+#   bytes — a deploy of commit X serves X's catalogue by construction;
+#   there is no committed page to drift;
+# - the browser arm gates the deploy: a red arm never ships;
+# - a build failure leaves the previous deployment serving with a visible
+#   failed-action status — disclosed, not hidden; cache fidelity is
+#   GitHub's Pages pipeline (immutable per-deploy URLs; no app-level
+#   cache to lie).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.13"
+      - name: Sync environment
+        run: uv sync --locked
+      - name: Records validity (CR-9/10/56/60, CR-38, CR-35)
+        run: uv run python scripts/validate_records.py
+      - name: Release-status validity (issue #224 pivot §3.2)
+        run: uv run python scripts/validate_release_status.py
+      - name: Index regeneration check (CR-21)
+        run: uv run python scripts/generate_index.py --check
+      - name: Unit tests (catalogue + validity arms)
+        run: uv run pytest -q
+
+  deploy:
+    needs: validity
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.13"
+      - name: Sync environment
+        run: uv sync --locked
+      - name: Generate index + catalogue page (deploy-time, §3.1)
+        run: |
+          set -euo pipefail
+          uv run python scripts/generate_index.py
+          uv run python scripts/generate_catalogue_page.py --dest _site --sha "${GITHUB_SHA}"
+      - name: Browser verification of the generated artifact (B4')
+        run: |
+          set -euo pipefail
+          uv run --with playwright python -m playwright install chromium --with-deps
+          uv run --with playwright python scripts/verify_catalogue_browser.py --dest _site
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
