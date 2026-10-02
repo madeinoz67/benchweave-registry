@@ -89,6 +89,30 @@ def _reviews(root: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     return reviews
 
 
+def _unlisted(root: Path) -> set[tuple[str, str, str]]:
+    """Keys carrying a lifecycle UNLIST record (issue #225 slice 3, CR-32/E4).
+
+    Unlist is the one record-driven row drop: the catalogue stops offering
+    the release while its status document — and therefore its admissibility —
+    is untouched. Yank/revoked remain status-driven only (Q8): the generator
+    honours status documents, and a yank RECORD without a governing status
+    document is the validity gate's incoherence (``yank_status_absent:``),
+    never a silent drop here.
+    """
+    unlisted: set[tuple[str, str, str]] = set()
+    for path in record_paths(root / "records"):
+        parsed = json.loads(path.read_bytes())
+        if parsed.get("record_type") != "lifecycle":
+            continue
+        lifecycle = parsed.get("lifecycle", {})
+        if lifecycle.get("op") != "unlist":
+            continue
+        unlisted.add(
+            (lifecycle.get("publisher"), lifecycle.get("plugin"), lifecycle.get("version"))
+        )
+    return unlisted
+
+
 def _maintenance(publish: dict[str, Any]) -> str:
     state = publish.get("support_state")
     if state in ("maintained", "maintenance_only", "unmaintained"):
@@ -100,6 +124,7 @@ def generate(root: Path) -> bytes:
     """The canonical index bytes for the committed trees; pure and offline."""
     reviews = _reviews(root)
     publishes = _publish_records(root)
+    unlisted = _unlisted(root)
     rows: list[dict[str, Any]] = []
     problems: list[str] = []
     seen_rows: set[tuple[str, str, str]] = set()
@@ -204,6 +229,14 @@ def generate(root: Path) -> bytes:
                     continue
                 if lifecycle in ("yanked", "revoked"):
                     continue
+            # CR-32/E4 (issue #225 slice 3): the record-driven, catalogue-only
+            # drop. The status checks above have already run for this row —
+            # an unlisted release with an INVALID status document still
+            # refuses the run (fail-closed), and an unlisted release with a
+            # valid status document stays resolvable and admissible; only
+            # the catalogue row is gone.
+            if row_key in unlisted:
+                continue
             review_record = reviews.get((publisher, plugin, version), {})
             review = review_record.get("review", {})
             publish = publishes.get((publisher, plugin, version), {})
