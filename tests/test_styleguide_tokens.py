@@ -69,8 +69,9 @@ def test_the_vendored_styleguide_is_digest_pinned_to_its_origin() -> None:
 def test_the_vendored_copy_declares_the_catalogue_component_shapes() -> None:
     """§4.9 + the #224 follow-on (§7): the declared shapes (filter bar,
     catalogue meta line, records table, record page) are declared IN the
-    vendored copy. The follow-on's two are registry-authored divergences,
-    recorded in the pin, pending the gateway's authored adoption."""
+    vendored copy — as AUTHORED bytes since the gateway's adoption (PR
+    #346) and the 2026-10-03 convergence re-copy; the interim
+    registry-authored divergence is closed."""
     html = STYLEGUIDE.read_text(encoding="utf-8")
     block = _style_block(html)
     assert "Filter bar" in html and "filter-bar" in block
@@ -81,8 +82,9 @@ def test_the_vendored_copy_declares_the_catalogue_component_shapes() -> None:
     assert "Record page" in html and "record-grid" in block, (
         "the record-page component declaration is missing"
     )
-    assert "pending gateway adoption" in html, (
-        "the registry-authored declarations must mark their adoption status"
+    assert "pending gateway adoption" not in html, (
+        "the divergence is converged: the vendor must be byte-identical to "
+        "the authored authority, divergence note gone"
     )
 
 
