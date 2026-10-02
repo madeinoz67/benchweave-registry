@@ -346,6 +346,17 @@ def _release(root: Path, publisher: str, plugin: str, version: str,
 def _findings(root: Path) -> list[str]:
     return vr.validate_tree(root)
 
+def _submission_artefacts(root: Path, publisher: str, plugin: str, version: str) -> None:
+    artefacts = (
+        root / "records" / "submissions" / publisher / plugin / version / "artefacts"
+    )
+    artefacts.mkdir(parents=True, exist_ok=True)
+    (artefacts / "submission.json").write_bytes(
+        vr.canonical_bytes({"submission_version": "0.1.1", "entries": []})
+    )
+
+
+
 
 # --- the namespace arm (CR-15/16/39, records-side) ------------------------------
 
@@ -551,6 +562,7 @@ def test_advisory_present_in_served_status_passes(tmp_path: Path) -> None:
 
 def test_withdraw_after_publication_refuses(tmp_path: Path) -> None:
     root = _gate_tree(tmp_path)
+    _submission_artefacts(root, "northwind-instruments", "beta-tool", "1.0.0")
     _release(root, "northwind-instruments", "beta-tool", "1.0.0")
     publish = publish_record(
         publisher="northwind-instruments", plugin="beta-tool", version="1.0.0"
@@ -569,6 +581,7 @@ def test_withdraw_at_higher_numeric_seq_still_refuses(tmp_path: Path) -> None:
     "2-publish.json" lexicographically, so a single mid-pass evaluation of
     the CR-32 arm saw the withdraw before the publish existed."""
     root = _gate_tree(tmp_path)
+    _submission_artefacts(root, "northwind-instruments", "beta-tool", "1.0.0")
     _release(root, "northwind-instruments", "beta-tool", "1.0.0")
     publish = publish_record(
         publisher="northwind-instruments", plugin="beta-tool", version="1.0.0"
@@ -584,6 +597,7 @@ def test_withdraw_at_higher_numeric_seq_still_refuses(tmp_path: Path) -> None:
 
 def test_pre_acceptance_withdraw_passes(tmp_path: Path) -> None:
     root = _gate_tree(tmp_path)
+    _submission_artefacts(root, "northwind-instruments", "beta-tool", "1.0.0")
     _plant(root, lifecycle_record(
         "withdraw", publisher="northwind-instruments", plugin="beta-tool", version="1.0.0",
     ))
@@ -610,6 +624,7 @@ def _transfer_record(extra_transfer: dict[str, Any] | None = None) -> dict[str, 
 
 def test_transfer_to_unvetted_receiver_refuses(tmp_path: Path) -> None:
     root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "gamma-tool", "1.0.0")
     _plant(root, _transfer_record({"to_publisher": "driftwood-labs"}))
     findings = _findings(root)
     assert any(f.startswith("transfer_receiver_unvetted:") for f in findings), findings
@@ -617,6 +632,7 @@ def test_transfer_to_unvetted_receiver_refuses(tmp_path: Path) -> None:
 
 def test_transfer_with_unresolved_vetting_reference_refuses(tmp_path: Path) -> None:
     root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "gamma-tool", "1.0.0")
     _plant(root, _transfer_record({"vetting_reference": "vetting/2024-09.pdf"}))
     findings = _findings(root)
     assert any(f.startswith("transfer_vetting_unresolved:") for f in findings), findings
@@ -624,6 +640,7 @@ def test_transfer_with_unresolved_vetting_reference_refuses(tmp_path: Path) -> N
 
 def test_transfer_without_both_consents_refuses(tmp_path: Path) -> None:
     root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "gamma-tool", "1.0.0")
     _plant(root, _transfer_record({"consents": ["northwind-instruments"]}))
     findings = _findings(root)
     assert any(f.startswith("transfer_consents_incomplete:") for f in findings), findings
@@ -631,6 +648,7 @@ def test_transfer_without_both_consents_refuses(tmp_path: Path) -> None:
 
 def test_coherent_transfer_passes(tmp_path: Path) -> None:
     root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "gamma-tool", "1.0.0")
     _plant(root, _transfer_record())
     assert _findings(root) == []
 
@@ -895,3 +913,104 @@ def test_pr_state_fixture_maps_every_truth_table_submission() -> None:
         (row["publisher"], row["plugin"], row["version"]) for row in table["rows"]
     }
     assert mapped == expected, (mapped ^ expected)
+
+
+# ── wave-2 residuals: G1 guards, G3 shared numbering, G5 existence ────────────
+
+
+def test_takedown_record_needs_no_status_sequence(tmp_path: Path) -> None:
+    """G1's scope guard: the ordering semantics and the schema's
+    status_sequence if/then bind op==yank ONLY — a takedown record (which
+    pairs with a revoked status) carries no status_sequence and stays green.
+    Pins the fold against overreach; green by design both before and after."""
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "revoked", "sequence": 2})
+    _plant(root, lifecycle_record(
+        "takedown", publisher="northwind-instruments", plugin="alpha-tool",
+        version="1.0.0",
+    ), seq=2)
+    assert _findings(root) == []
+
+
+def test_re_yank_multiplicity_is_representable(tmp_path: Path) -> None:
+    """G1's re-yank acceptance arm: N yank records each citing a sequence
+    <= the served document are all green (ordering is <=, never one-record).
+    DISCLOSED: nothing consumes re-yank multiplicity yet — the arm pins the
+    representability, not a consumer."""
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "yanked", "sequence": 4})
+    _plant(root, lifecycle_record(
+        "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 2},
+    ), seq=2)
+    _plant(root, lifecycle_record(
+        "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 3},
+    ), seq=3)
+    assert _findings(root) == []
+
+
+def test_yank_and_takedown_share_one_numbering_space(tmp_path: Path) -> None:
+    """G3: sequences are ONE space per release directory across ops — yank
+    and takedown at the same number collide (pinning the scoping; the
+    uniqueness arm itself landed in the first fold)."""
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "revoked", "sequence": 3})
+    _plant(root, lifecycle_record(
+        "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 2},
+    ), seq=2)
+    _plant(root, lifecycle_record(
+        "takedown", publisher="northwind-instruments", plugin="alpha-tool",
+        version="1.0.0",
+    ), seq=2)
+    findings = _findings(root)
+    assert any(f.startswith("record_seq_duplicate:") for f in findings), findings
+
+
+# --- G5: inert-record existence -------------------------------------------------
+
+
+def test_withdraw_on_a_nonexistent_submission_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, lifecycle_record(
+        "withdraw",
+        publisher="northwind-instruments",
+        plugin="theta-tool",
+        version="1.0.0",
+    ))
+    findings = _findings(root)
+    assert any(f.startswith("record_subject_absent:") for f in findings), findings
+
+
+def test_unlist_on_a_nonexistent_release_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, lifecycle_record(
+        "unlist", publisher="northwind-instruments", plugin="eta-tool", version="1.0.0",
+    ))
+    findings = _findings(root)
+    assert any(f.startswith("record_subject_absent:") for f in findings), findings
+
+
+def test_transfer_on_a_nonexistent_release_refuses(tmp_path: Path) -> None:
+    root = _gate_tree(tmp_path)
+    _plant(root, _transfer_record())
+    findings = _findings(root)
+    assert any(f.startswith("record_subject_absent:") for f in findings), findings
+
+
+def test_withdraw_with_staged_artefacts_is_the_pre_acceptance_shape(
+    tmp_path: Path,
+) -> None:
+    """The C2 document-class boundary meets G5: the submit flow's staged
+    artefacts ARE the submission's on-disk presence — a withdraw against
+    them is the pre-acceptance shape and passes."""
+    root = _gate_tree(tmp_path)
+    _submission_artefacts(root, "northwind-instruments", "beta-tool", "1.0.0")
+    _plant(root, lifecycle_record(
+        "withdraw", publisher="northwind-instruments", plugin="beta-tool", version="1.0.0",
+    ))
+    assert _findings(root) == []

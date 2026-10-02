@@ -655,6 +655,30 @@ def validate_tree(root: Path) -> list[str]:
             lifecycle.get("version"),
         )
         op = lifecycle.get("op")
+        # Fold G5 (inert-record existence): a lifecycle record whose SUBJECT
+        # does not exist is inert — refused loudly instead of merging green.
+        # withdraw's subject is the submission (the staged artefacts or a
+        # committed record under records/submissions/<p>/<x>/<v>/); unlist and
+        # transfer govern a release. yank/advise are status-paired already.
+        if op in ("withdraw", "unlist", "transfer"):
+            if op == "withdraw":
+                subject = (
+                    records_dir / "submissions" / str(key[0]) / str(key[1]) / str(key[2])
+                )
+                subject_present = subject.is_dir() and any(
+                    entry.is_file() for entry in subject.rglob("*")
+                )
+                subject_kind = "submission"
+            else:
+                subject_present = key in manifests
+                subject_kind = "release"
+            if not subject_present:
+                findings.append(
+                    f"record_subject_absent:{path.name}: {op} for "
+                    f"{'/'.join(str(part) for part in key)} but its {subject_kind} "
+                    "does not exist"
+                )
+                continue
         if op == "yank":
             # Fold R2 (lane A F2, round-2 refute) + slice 3's §2.3 pairing:
             # a canonical yank record whose release lacks a status.json with
