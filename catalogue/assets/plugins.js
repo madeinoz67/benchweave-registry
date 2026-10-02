@@ -70,6 +70,16 @@ function filterRows(rows, query) {
       var families = (compat.stg_versions || []).concat(compat.otdp_versions || []);
       if (families.indexOf(query.standard_version) === -1) return false;
     }
+    /* Evidence facet (#224 follow-on §2.2): include-if-any — a row matches
+       level L iff ANY evidence entry carries level L, mirroring the
+       standard-version facet's include-if-listed semantics. A row with no
+       evidence matches no level. Machine values: hardware|simulated|structural. */
+    if (!isNoFilter(query.evidence_level)) {
+      var hasLevel = (row.evidence || []).some(function (entry) {
+        return String(entry.level || '') === query.evidence_level;
+      });
+      if (!hasLevel) return false;
+    }
     if (!isNoFilter(query.maintenance) && row.maintenance !== query.maintenance) return false;
     if (!isNoFilter(query.advisories)) {
       var hasAdvisories = (row.advisories || []).length > 0;
