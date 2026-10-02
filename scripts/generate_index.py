@@ -112,6 +112,7 @@ def generate(root: Path) -> bytes:
                         "signed-valid" if (release_dir / "manifest.sig").is_file() else "unsigned",
                     ),
                     "timestamp": publish.get("timestamp"),
+                    "timestamp_recommended": bool(publish.get("timestamp_recommended", False)),
                     "display_name": manifest.get("display_name", plugin),
                     "summary": manifest.get("summary", ""),
                     "licence_spdx": manifest.get("licence", {}).get("spdx_expression", "unknown"),

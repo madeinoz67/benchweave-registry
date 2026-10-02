@@ -399,6 +399,10 @@
             }
           },
           "description": "The RFC 3161 trusted timestamp verified at recording: with one, the signature stays valid past key expiry/revocation (validity judged at the TSA-attested time)."
+        },
+        "timestamp_recommended": {
+          "type": "boolean",
+          "description": "Advisory (owner refinement 2026-10-02): timestamping is optional but recommended. True on a signed-but-untimestamped release - an un-timestamped signature is valid until the key expires; a timestamped one stays valid past expiry or revocation. Never a refusal."
         }
       }
     }

@@ -56,7 +56,8 @@
           "gateway_ref",
           "firmware_attestation",
           "signature_state",
-          "timestamp"
+          "timestamp",
+          "timestamp_recommended"
         ],
         "additionalProperties": false,
         "properties": {
@@ -309,6 +310,10 @@
                 }
               }
             ]
+          },
+          "timestamp_recommended": {
+            "type": "boolean",
+            "description": "The advisory, advertised: true when the release is signed but un-timestamped (valid until key expiry)."
           }
         }
       }

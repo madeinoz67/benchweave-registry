@@ -314,6 +314,14 @@ def test_unpinned_publish_record_still_validates() -> None:
     assert findings_for(record) == []
 
 
+def test_timestamp_recommended_advisory_is_recorded() -> None:
+    """The optional-but-recommended advisory rides the publish record."""
+    record = publish_record()
+    record["lifecycle"]["signature_state"] = "signed-valid"
+    record["lifecycle"]["timestamp_recommended"] = True
+    assert findings_for(record) == []
+
+
 def test_publish_record_records_firmware_attestation() -> None:
     record = publish_record()
     record["lifecycle"]["firmware_attestation"] = {

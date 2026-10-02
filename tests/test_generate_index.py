@@ -96,6 +96,7 @@ def test_row_carries_the_catalogue_and_styleguide_fields() -> None:
     assert row["kind"] == "admitted-release"
     assert row["signature_state"] == "signed-valid"
     assert row["timestamp"] is None
+    assert row["timestamp_recommended"] is True
     assert "conformance-evidence-self-attested" in row["unverified_markers"]
     # F1 rework: the pin is advertised, never enforced.
     assert row["gateway_ref"] == "45d5e7fdc45dc6bbf765b1c8e85af70a2d830d94"
