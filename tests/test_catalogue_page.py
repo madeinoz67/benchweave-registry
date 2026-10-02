@@ -88,6 +88,38 @@ FOOTER_SENTENCE = (
     "registry repository of record</a>. There is no hosted registry service."
 )
 
+# The footer negation as a WHOLE PARAGRAPH (fold F3, lane A F1): the
+# pre-fold arm counted the phrase and pinned a SUBSTRING — it defended the
+# phrase, not the claim, so lane A's plants (a ". One is coming." suffix on
+# the pinned sentence, "hosted front end" prose, a "hosted catalogue" meta)
+# all passed. The negation is now pinned as the exact paragraph element.
+FOOTER_PARAGRAPH = (
+    '<p class="catalogue-meta">Rendered view of the '
+    '<a href="https://github.com/madeinoz67/benchweave-registry">'
+    "registry repository of record</a>. There is no hosted registry service.</p>"
+)
+
+# The service-claim vocabulary (fold F3): these terms may appear ONLY inside
+# the pinned footer negation paragraph — nowhere else in any generated page
+# (prose, meta, title, attributes, comments; both templates, both mark
+# postures, record pages included).
+SERVICE_CLAIM_VOCAB = ("hosted", "front end", "coming soon", "always up to date")
+
+
+def strip_footer_negations(text: str) -> str:
+    return text.replace(FOOTER_PARAGRAPH, "")
+
+
+def assert_no_service_claim_vocabulary(page: str, what: str) -> None:
+    """F3's scoping arm: after removing the pinned negation paragraph(s),
+    no service-claim vocabulary term remains anywhere in the page."""
+    remainder = strip_footer_negations(page).lower()
+    for term in SERVICE_CLAIM_VOCAB:
+        assert term not in remainder, (
+            f"{what}: the service-claim term {term!r} appears outside the pinned "
+            "footer negation — a generated page may not carry a service claim"
+        )
+
 
 def _module() -> Any:
     spec = importlib.util.spec_from_file_location("generate_catalogue_page", GENERATOR)
@@ -378,9 +410,37 @@ def test_page_generation_is_deterministic() -> None:
 
 
 def test_generated_page_carries_no_template_markers() -> None:
+    """Fold F10: the unfired render strips the WHOLE marker family — the
+    pre-fold render leaked the bw:wordmark delimiters (they were stripped
+    from the structural-check copy only), so the test's name overclaimed.
+    The fired posture keeps exactly its wordmark delimiters (the switch's
+    documented state, pinned by the fired arm below)."""
     page = _render(FIXTURE.read_bytes())
-    assert "bw:catalogue-cards begin" not in page
-    assert "bw:provenance -->" not in page
+    for marker in (
+        "bw:catalogue-cards begin",
+        "bw:catalogue-cards end",
+        "bw:provenance -->",
+        "bw:snapshot -->",
+        "bw:caption -->",
+        "bw:wordmark begin",
+        "bw:wordmark end",
+    ):
+        assert marker not in page, f"a template marker survived the render: {marker}"
+
+
+def test_the_fired_posture_keeps_only_its_wordmark_delimiters() -> None:
+    """F10's fired control: --registry-mark retains the wordmark begin/end
+    delimiters (they wrap the switched-in mark and the fired arm splits on
+    them) and strips every other marker."""
+    page = _render(FIXTURE.read_bytes(), registry_mark=True)
+    assert "bw:wordmark begin" in page and "bw:wordmark end" in page
+    for marker in (
+        "bw:catalogue-cards",
+        "bw:provenance -->",
+        "bw:snapshot -->",
+        "bw:caption -->",
+    ):
+        assert marker not in page, f"a non-wordmark marker survived: {marker}"
 
 
 # ── provenance (A06) ──────────────────────────────────────────────────────────
@@ -449,6 +509,76 @@ def test_no_affirmative_service_claim_in_the_template() -> None:
     )
     assert "There is no hosted registry service." in template
     assert "registry.benchweave.dev" not in template.lower()
+
+
+# ── fold F3 (lane A F1, 2026-10-02): the claim, not the phrase ────────────────
+
+
+def test_the_footer_negation_is_pinned_as_a_whole_paragraph() -> None:
+    """F3: the negation is pinned as the exact paragraph element — any
+    suffix, prefix or rewording inside the footer paragraph reddens, where
+    the pre-fold substring pin let ". One is coming." ride."""
+    for source in (FIXTURE.read_bytes(), INDEX.read_bytes()):
+        page = _render(source)
+        assert page.count(FOOTER_PARAGRAPH) == 1, (
+            "the footer negation paragraph drifted (pinned as exact bytes)"
+        )
+
+
+def test_the_service_claim_vocabulary_is_scoped_to_the_negation() -> None:
+    """F3's scoping arm: 'hosted', 'front end', 'coming soon' and 'always up
+    to date' appear ONLY inside the pinned footer negation — nowhere else
+    in any generated page, either index source, either mark posture."""
+    for registry_mark in (False, True):
+        assert_no_service_claim_vocabulary(
+            _render(FIXTURE.read_bytes(), registry_mark=registry_mark),
+            f"the index page (registry_mark={registry_mark})",
+        )
+    assert_no_service_claim_vocabulary(
+        _render(INDEX.read_bytes()), "the committed-index page"
+    )
+
+
+def test_lane_a_plants_fail_the_fold_arms_and_passed_the_old_one() -> None:
+    """F3's RED discrimination, made permanent: lane A's exact plants — the
+    "hosted front end updates hourly" prose, the "hosted catalogue" meta
+    description and the ". One is coming." footer suffix — must FAIL the
+    paragraph pin and the vocabulary scoping. The control proves the
+    defect: the pre-fold phrase-count arm PASSES on the planted page (it
+    defended the phrase, not the claim)."""
+    planted = (
+        _template()
+        .replace(
+            "<title>Plugin catalogue, BenchWeave Registry</title>",
+            "<title>Plugin catalogue, BenchWeave Registry</title>\n"
+            '<meta name="description" content="the hosted catalogue for '
+            'BenchWeave plugins">',
+            1,
+        )
+        .replace(
+            "plugin stays local admission on your own bench.</p>",
+            "plugin stays local admission on your own bench.</p>\n"
+            "      <p>A hosted front end updates hourly.</p>",
+            1,
+        )
+        .replace(
+            "There is no hosted registry service.</p>",
+            "There is no hosted registry service. One is coming.</p>",
+            1,
+        )
+    )
+    for marker in ("hosted catalogue", "hosted front end", "One is coming"):
+        assert marker in planted, f"the plant {marker!r} did not apply"
+    planted_page = str(_module().render_page(FIXTURE.read_bytes(), planted, SHA))
+    # control: the pre-fold arm still passes — it counted the phrase only
+    assert planted_page.lower().count("registry service") == 1
+    # the fold arms catch all three plants
+    with pytest.raises(AssertionError, match="paragraph drifted"):
+        assert planted_page.count(FOOTER_PARAGRAPH) == 1, (
+            "the footer negation paragraph drifted"
+        )
+    with pytest.raises(AssertionError, match="service-claim term"):
+        assert_no_service_claim_vocabulary(planted_page, "the planted page")
 
 
 # ── fail-closed at generation ─────────────────────────────────────────────────
@@ -606,6 +736,36 @@ def test_truncate_at_twins_agree() -> None:
     match = re.search(r"var TRUNCATE_AT = (\d+);", js)
     assert match is not None, "plugins.js lost its named TRUNCATE_AT"
     assert int(match.group(1)) == _module().TRUNCATE_AT
+
+
+def test_the_icons_twins_are_byte_equal() -> None:
+    """Fold F12 (lane A F5): the Lucide icon bodies have two carriers — the
+    generator stamps them into static rows and record pages, the wiring
+    clones them into on-demand rows; unequal twins render one row's icons
+    two ways. The JS keys are camelCase by design; the BODIES are pinned
+    byte-equal, and no icon may exist on one carrier only (the shared six;
+    the generator's chevron/copy/file extras are record-page-only and have
+    no JS twin)."""
+    module = _module()
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    chunk = js.split("var ICONS = {", 1)[1].split("\n};", 1)[0]
+    js_icons = dict(re.findall(r"([A-Za-z]+):\s*'([^']*)'", chunk))
+    assert js_icons, "the JS ICONS object did not parse"
+    name_map = {
+        "signature": "signature",
+        "circleDashed": "circle-dashed",
+        "globe": "globe",
+        "cpu": "cpu",
+        "drive": "hard-drive",
+        "alert": "triangle-alert",
+    }
+    assert set(js_icons) == set(name_map), (
+        f"an icon joined one carrier only: js={sorted(js_icons)}"
+    )
+    for js_name, py_name in name_map.items():
+        assert js_icons[js_name] == module.ICONS[py_name], (
+            f"the {py_name} icon twins drifted (JS key {js_name!r})"
+        )
 
 
 def test_short_uses_the_twin_constant() -> None:

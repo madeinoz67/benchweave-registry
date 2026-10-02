@@ -53,6 +53,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -289,6 +290,27 @@ def detail_id(row: dict[str, Any]) -> str:
     carry ``/`` and ``@``, which CSS selectors cannot take unescaped). A
     TWIN of the JS ``detailId``, pinned by the page tests."""
     return "bw-detail-" + SLUG_RE.sub("-", row_key(row))
+
+
+def _refuse_detail_id_collisions(rows: list[dict[str, Any]]) -> None:
+    """Fold F9 (lane B F3): the detail-host slug folds every
+    non-``[A-Za-z0-9-]`` character to ``-``, so distinct index-schema-legal
+    identities (``a-b/c`` and ``a/b-c`` at one version) can share one host
+    id — two rows would then drill into ONE host. The schema cannot
+    express this (both identities are legal); generation refuses, naming
+    both rows."""
+    hosts: dict[str, str] = {}
+    for row in rows:
+        host = detail_id(row)
+        label = f"{row.get('registry_id')}/{row.get('package_id')}/{row.get('version')}"
+        previous = hosts.get(host)
+        if previous is not None:
+            raise SystemExit(
+                f"page_detail_id_collision: {previous} and {label} share detail "
+                f"host #{host} — the host slug folds [^A-Za-z0-9-] to '-', and "
+                "two rows would drill into one host"
+            )
+        hosts[host] = label
 
 
 def record_url(row: dict[str, Any]) -> str:
@@ -616,6 +638,12 @@ def render_page(
         _marked, _sep2, _tail2 = wordmark_end.partition(WORDMARK_END)
         page = _head + WORDMARK_BEGIN + "\n  " + REGISTRY_WORDMARK + "\n  " + WORDMARK_END
         page += _tail2
+    else:
+        # F10 (reviewer R3, the fold): the unfired render strips its
+        # wordmark delimiters from the OUTPUT — pre-fold they were stripped
+        # from the structural-check copy only and leaked into the served
+        # page.
+        page = page.replace(WORDMARK_BEGIN, "").replace(WORDMARK_END, "")
     return page.replace(PROVENANCE_MARKER, _stamp_html(sha, index_version), 1)
 
 
@@ -633,11 +661,14 @@ def _release_tree_url(row: dict[str, Any], sha: str) -> str:
 
 def _raw_file_url(row: dict[str, Any], sha: str, name: str) -> str:
     """One release file, raw at the STAMPED commit (§2.7 — exact bytes, zero
-    deploy weight; no LFS in this repo, disclosed residual)."""
+    deploy weight; no LFS in this repo, disclosed residual). The file NAME
+    is percent-encoded (fold F5, lane A F4): a name carrying '#', '?', a
+    space or non-ASCII truncated or corrupted the href — quote encodes it
+    and the raw host decodes it back."""
     return (
         f"https://raw.githubusercontent.com/madeinoz67/benchweave-registry/{sha}"
         f"/releases/{row.get('registry_id') or ''}/{row.get('package_id') or ''}"
-        f"/{row.get('version') or ''}/{name}"
+        f"/{row.get('version') or ''}/{quote(str(name), safe='')}"
     )
 
 
@@ -702,10 +733,17 @@ def _record_fragment(
         )
         sig_row = '<span class="muted">No publisher signature</span>'
     validity = publisher_entry.get("key_validity") or {}
-    key_validity = (
-        f'<span class="mono">{_esc(_date_part(validity.get("not_before")))} to '
-        f'{_esc(_date_part(validity.get("not_after")))}</span>'
-    )
+    not_before = validity.get("not_before")
+    not_after = validity.get("not_after")
+    if not_before and not_after:
+        key_validity = (
+            f'<span class="mono">{_esc(_date_part(not_before))} to '
+            f'{_esc(_date_part(not_after))}</span>'
+        )
+    else:
+        # F7 (reviewer R1): key_validity is optional — an absent bound
+        # renders the honest none-recorded, never an empty " to " window.
+        key_validity = '<span class="muted">none recorded</span>'
     vetted = publisher_entry.get("vetted_at")
     vetted_html = (
         f' <span class="muted">vetted {_esc(_date_part(vetted))}</span>'
@@ -978,7 +1016,9 @@ def render_record_page(
         chrome = chrome.replace(WORDMARK_BEGIN, "", 1).replace(WORDMARK_END, "", 1)
     _check_structural(chrome, "catalogue/record.template.html (structural chrome)")
     fragment = _record_fragment(row, publisher_entry, files, sha)
-    page = head + RECORD_BEGIN + "\n" + fragment + "\n" + RECORD_END + tail
+    # F10 (reviewer R3, the fold): the record begin/end markers are
+    # generation-time delimiters — they do not ride the served page.
+    page = head + fragment + tail
     if registry_mark:
         _head, _sep, rest2 = page.partition(WORDMARK_BEGIN)
         _marked, _sep2, tail2 = rest2.partition(WORDMARK_END)
@@ -986,6 +1026,11 @@ def render_record_page(
             _head + WORDMARK_BEGIN + "\n  " + REGISTRY_WORDMARK + "\n  "
             + WORDMARK_END + tail2
         )
+    else:
+        # F10: the unfired render strips its wordmark delimiters from the
+        # output too (the fired posture keeps them — they wrap the
+        # switched-in mark).
+        page = page.replace(WORDMARK_BEGIN, "").replace(WORDMARK_END, "")
     return page.replace(PROVENANCE_MARKER, _stamp_html(sha, index_version), 1)
 
 
@@ -1019,7 +1064,9 @@ def _release_dir(root: Path, row: dict[str, Any]) -> Path:
 def _release_files(root: Path, row: dict[str, Any]) -> list[dict[str, str]]:
     """Every regular file in the row's release directory (§2.7), sorted —
     the manifest entry displays the ROW's digest, the payload entry the
-    MANIFEST-DECLARED archive digest, others link raw with no claim."""
+    MANIFEST-DECLARED archive digest, others link raw with no claim.
+    Symlinks are skipped (fold F5, lane A F4): a symlink is not a release
+    file, and listing one linked bytes the tree never published."""
     release_dir = _release_dir(root, row)
     if not release_dir.is_dir():
         raise SystemExit(
@@ -1036,7 +1083,9 @@ def _release_files(root: Path, row: dict[str, Any]) -> list[dict[str, str]]:
         except (ValueError, UnicodeDecodeError):
             payload_digest = ""
     files: list[dict[str, str]] = []
-    for path in sorted(p for p in release_dir.iterdir() if p.is_file()):
+    for path in sorted(
+        p for p in release_dir.iterdir() if p.is_file() and not p.is_symlink()
+    ):
         name = path.name
         digest = ""
         if name == "manifest.json":
@@ -1059,9 +1108,18 @@ def _verify_row_signature(
     import verify
 
     label = f"{row.get('registry_id')}/{row.get('package_id')}/{row.get('version')}"
-    ok = verify.release_signature_verifies(
-        root, str(row.get("publisher") or ""), _release_dir(root, row)
-    )
+    try:
+        ok = verify.release_signature_verifies(
+            root, str(row.get("publisher") or ""), _release_dir(root, row)
+        )
+    except ValueError as exc:
+        # F4 (lane A F3, the fold): a corrupt recorded key body raises
+        # ValueError from load_pem_public_key — a signature-path refusal,
+        # typed and naming the row, never a bare traceback.
+        raise SystemExit(
+            f"page_signature_invalid: {label} — the publisher's recorded "
+            f"ed25519_public_key_pem is not a parseable public key ({exc})"
+        ) from exc
     if not ok:
         raise SystemExit(
             f"page_signature_invalid: {label} — the row claims signed-valid but "
@@ -1109,6 +1167,8 @@ def main() -> int:
         index_version = 1
     # The verification pass runs BEFORE anything is written: a bad signature
     # refuses the whole deploy, not a fragment of it (§2.7 — nothing deploys).
+    # The detail-host collision check rides the same pre-write pass (F9).
+    _refuse_detail_id_collisions(rows)
     for row in rows:
         _publisher_entry_or_refuse(row, publishers)
         if row.get("signature_state") == "signed-valid":

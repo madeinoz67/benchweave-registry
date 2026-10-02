@@ -252,18 +252,61 @@ if (typeof module !== 'undefined' && module.exports) {
   var staticKeys = []; // rowKeys in the committed block, in order
   var expandState = {}; // rowKey -> 'open' | 'closed' (collapse without re-fetch)
 
+  /* The catalogue page's own URL, captured ONCE at load (fold F1, lane B
+     F1): hx-push-url rebases the document's URL to the pushed record URL,
+     and every RELATIVE URL computed afterwards — the next row's drill
+     fetch, a reopen after collapse, a filter URL write — resolved under
+     the record page and 404'd or corrupted. Drill URLs and URL writes are
+     computed against these captured values, never against location. */
+  var catalogueHref = location.href;
+  var cataloguePath = location.pathname;
+
+  function absoluteRecordUrl(url) {
+    try {
+      return new URL(url, catalogueHref).href;
+    } catch (err) {
+      return url; // exotic origins where URL cannot parse — relative stands
+    }
+  }
+
+  /* F1, the load-time half: upgrade every STAMPED static drill anchor to
+     the absolute form NOW, synchronously at script eval. htmx captures
+     each element's request path into its internal data when it processes
+     the element (at DOMContentLoaded, after both deferred scripts have
+     evaluated) — a rewrite that waits for the index fetch lands after
+     that capture and never reaches the wire. With this pass the captured
+     path is absolute, and no later push can rebase it. (A pathologically
+     late script injection after htmx processed the anchors would still
+     capture relative — the collapse URL fix below keeps the address bar
+     honest in that corner.) */
+  Array.prototype.forEach.call(
+    list.querySelectorAll('tr.bw-row[data-bw-package-id] a.release-name'),
+    function (anchor) {
+      var url = absoluteRecordUrl(anchor.getAttribute('href') || '');
+      anchor.setAttribute('href', url);
+      anchor.setAttribute('hx-get', url);
+    }
+  );
+
   function textSlot(tr, slot, text) {
     var el = tr.querySelector('[data-bw-slot="' + slot + '"]');
     if (el) el.textContent = text;
   }
 
   /* The URL round-trip (§2.2 — the hx-push-url intent): the filter state
-     rides q, kind, sig, ev, maint, adv and repeated cap params. */
+     rides q, kind, sig, ev, maint, adv and repeated cap params. Fold F2
+     (lane B F2): 'kind' and 'sig' are the two selects whose DOM default is
+     NOT the 'all' sentinel — eliding the sentinel narrowed a reload back
+     to the CR-22 defaults, silently dropping unsigned rows from a user
+     who explicitly chose "All kinds"/"Any", so these two serialize their
+     sentinel explicitly. The other facets default to the sentinel in the
+     DOM and keep eliding it. The written path is the CATALOGUE path
+     (F1) — never location, which a drill push has rebased. */
   function queryForUrl(query) {
     var params = new URLSearchParams();
     if (!isNoTextFilter(query.text)) params.set('q', String(query.text));
-    if (!isNoFilter(query.kind)) params.set('kind', query.kind);
-    if (!isNoFilter(query.signature_state)) params.set('sig', query.signature_state);
+    if (query.kind) params.set('kind', query.kind);
+    if (query.signature_state) params.set('sig', query.signature_state);
     if (!isNoFilter(query.evidence_level)) params.set('ev', query.evidence_level);
     if (!isNoFilter(query.maintenance)) params.set('maint', query.maintenance);
     if (!isNoFilter(query.advisories)) params.set('adv', query.advisories);
@@ -271,7 +314,7 @@ if (typeof module !== 'undefined' && module.exports) {
       params.append('cap', cap);
     });
     var text = params.toString();
-    return text ? '?' + text : location.pathname;
+    return cataloguePath + (text ? '?' + text : '');
   }
 
   function pushQuery(query) {
@@ -361,7 +404,9 @@ if (typeof module !== 'undefined' && module.exports) {
     if (sigHost) sigHost.innerHTML = sigCellHtml(slots);
     var anchor = tr.querySelector('a.release-name');
     if (anchor) {
-      var url = recordUrl(row);
+      /* F1: cloned rows carry the absolute drill URL computed against the
+         load-time catalogue base, immune to any pushed record URL. */
+      var url = absoluteRecordUrl(recordUrl(row));
       anchor.textContent = slots['display-name'];
       anchor.setAttribute('href', url);
       anchor.setAttribute('hx-get', url);
@@ -381,12 +426,19 @@ if (typeof module !== 'undefined' && module.exports) {
     var evidenceHost = tr.querySelector('[data-bw-slot="evidence"]');
     if (evidenceHost) {
       evidenceHost.textContent = '';
+      /* F8 (reviewer R2): cloned rows stack like static rows — the
+         generator wraps the evidence badges in a .cell-stack flex column
+         (an empty set renders the same empty wrapper), so a multi-evidence
+         row never renders as an inline run. */
+      var evidenceStack = document.createElement('div');
+      evidenceStack.className = 'cell-stack';
       slots.evidence.forEach(function (item) {
         var badge = document.createElement('span');
         badge.className = 'badge badge-' + item.tone;
         badge.textContent = item.text;
-        evidenceHost.appendChild(badge);
+        evidenceStack.appendChild(badge);
       });
+      evidenceHost.appendChild(evidenceStack);
     }
     var capsHost = tr.querySelector('[data-bw-slot="capabilities"]');
     if (capsHost) {
@@ -397,6 +449,11 @@ if (typeof module !== 'undefined' && module.exports) {
         muted.textContent = 'None declared';
         capsHost.appendChild(muted);
       } else {
+        /* F8: capability lines stack in .cell-stack like the generator's
+           cell; the muted none-declared span stays bare (generator parity
+           — the wrapper exists only when lines exist). */
+        var capStack = document.createElement('div');
+        capStack.className = 'cell-stack';
         slots.capabilities.forEach(function (cap) {
           var line = document.createElement('span');
           line.className = 'cap-line';
@@ -404,8 +461,9 @@ if (typeof module !== 'undefined' && module.exports) {
           var label = document.createElement('span');
           label.textContent = cap.label;
           line.appendChild(label);
-          capsHost.appendChild(line);
+          capStack.appendChild(line);
         });
+        capsHost.appendChild(capStack);
       }
     }
     var advHost = tr.querySelector('[data-bw-slot="advisories"]');
@@ -513,11 +571,24 @@ if (typeof module !== 'undefined' && module.exports) {
     }
     if (form) {
       form.addEventListener('reset', function () {
-        setTimeout(function () { applyFilters(true); }, 0);
+        /* Fold F2's reset clause (the reviewer NIT): after the DOM resets
+           to its defaults the URL becomes the canonical clean catalogue
+           URL — replace, never push (resetting is not navigation), and no
+           default-state params ride along. */
+        setTimeout(function () {
+          applyFilters(false);
+          try {
+            history.replaceState({}, '', cataloguePath);
+          } catch (err) {
+            /* as pushState above */
+          }
+        }, 0);
       });
     }
-    /* The drill toggle (§2.5): a second click collapses WITHOUT re-fetch —
-       the open content is hidden and restored, htmx fetches once per row. */
+    /* The drill toggle (§2.5): a second click on an OPEN row collapses
+       WITHOUT re-fetch; re-expansion fetches again — a fetch per OPEN,
+       never per collapse (the pre-fold comment wrongly claimed
+       fetch-once-per-row). */
     document.addEventListener('htmx:beforeRequest', function (event) {
       var target = event.target;
       if (!target || !target.classList || !target.classList.contains('release-name')) return;

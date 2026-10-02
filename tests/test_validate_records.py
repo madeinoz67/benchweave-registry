@@ -470,6 +470,39 @@ def test_traversal_shaped_release_dir_refuses(tmp_path: Path) -> None:
     findings = vr.validate_tree(sandbox)
     assert any(f.startswith("release_path_unsafe:") for f in findings), findings
 
+# --- fold F6 (2026-10-02, lane A F4): publisher identity uniqueness ------------
+
+
+def test_duplicate_publisher_ids_refuse(tmp_path: Path) -> None:
+    """F6: publishers.json keyed two entries under one publisher_id — every
+    consumer (the page generator's join, verify's key map) silently keeps
+    the LAST entry; the validity gate refuses the duplicate, naming the
+    id. The control is the real single-publisher tree, which every
+    tree_with-based arm already proves green."""
+    publishers_path = tmp_path / "records" / "publishers.json"
+    publishers_path.parent.mkdir(parents=True)
+    base = json.loads((REPO / "records" / "publishers.json").read_bytes())
+    duplicate = copy.deepcopy(base)
+    duplicate["publishers"].append(copy.deepcopy(base["publishers"][0]))
+    publishers_path.write_bytes(vr.canonical_bytes(duplicate))
+    findings = vr.validate_tree(tmp_path)
+    assert any(f.startswith("publisher_id_duplicate:") for f in findings), findings
+
+
+def test_distinct_publisher_ids_still_pass(tmp_path: Path) -> None:
+    """F6 control: two DISTINCT publisher entries stay green."""
+    publishers_path = tmp_path / "records" / "publishers.json"
+    publishers_path.parent.mkdir(parents=True)
+    base = json.loads((REPO / "records" / "publishers.json").read_bytes())
+    second = copy.deepcopy(base["publishers"][0])
+    second["publisher_id"] = "quarrystone-labs"
+    second["namespace"] = "quarrystone-labs"
+    document = {"publishers_version": 1, "publishers": [base["publishers"][0], second]}
+    publishers_path.write_bytes(vr.canonical_bytes(document))
+    findings = vr.validate_tree(tmp_path)
+    assert not any(f.startswith("publisher_id_duplicate:") for f in findings), findings
+
+
 # --- fold R2/R5 (2026-10-02 round-2 refute) ------------------------------------
 
 

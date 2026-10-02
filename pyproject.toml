@@ -31,3 +31,6 @@ files = ["scripts", "tests"]
 [tool.pytest.ini_options]
 addopts = "-q -p no:cacheprovider"
 testpaths = ["tests"]
+markers = [
+    "browser: the deploy-gate browser arm (needs playwright + chromium; the records workflow's browser job runs it, the fast validity lane excludes it)",
+]

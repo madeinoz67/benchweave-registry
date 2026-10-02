@@ -150,6 +150,7 @@ either refusal.
 | `D-S2l` | Screen-reader audit beyond the floor | `D-S2f`'s floor half (focus rings, labels, contrast are in) | The first a11y audit |
 | `D-S2m` | "How publication works" + Publishers/Advisories nav surfaces (user-facing publication prose) | Slice 4 / gateway issue #226; the follow-on design record for the prose | Slice 4's design pass |
 | `D-S2n` | The manifest's unrendered descriptive fields (limitations, maintainers, provides, permissions, device_targets, tags, released_at, issues/support URLs, changelog path) | The follow-on design record | Owner asks / slice 4 |
+| `D-S2o` | LFS adoption — raw→media redirect for the record pages' download links (today no LFS exists in this repo: no `.gitattributes`, `payload.zip` a plain zip blob; if releases ever ride LFS, `raw.githubusercontent.com` serves pointer files, not bytes, and the download bindings get their own pass) | The follow-on design record §2.7/§3 (raw.githubusercontent drift / LFS residual) | LFS adoption |
 
 ## Family conventions
 

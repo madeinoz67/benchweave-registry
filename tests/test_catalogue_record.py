@@ -24,6 +24,7 @@ from typing import Any
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from test_catalogue_page import FOOTER_PARAGRAPH, assert_no_service_claim_vocabulary
 
 REPO = Path(__file__).resolve().parents[1]
 GENERATOR = REPO / "scripts" / "generate_catalogue_page.py"
@@ -258,6 +259,21 @@ def test_record_pages_make_no_service_claim_in_both_mark_postures() -> None:
     assert "<circle" not in fired
 
 
+def test_the_record_footer_negation_is_pinned_and_vocabulary_scoped() -> None:
+    """Fold F3 on the record pages: the same footer paragraph pinned exact
+    (any ". One is coming." suffix reddens) and the service-claim
+    vocabulary scoped to it, both mark postures."""
+    row = _row("northwind-instruments/northwind-psu")
+    for posture in (False, True):
+        page = _render_record(row, FILES, registry_mark=posture)
+        assert page.count(FOOTER_PARAGRAPH) == 1, (
+            f"the record footer paragraph drifted (registry_mark={posture})"
+        )
+        assert_no_service_claim_vocabulary(
+            page, f"the record page (registry_mark={posture})"
+        )
+
+
 # ── R10: the record template ──────────────────────────────────────────────────
 
 
@@ -304,6 +320,177 @@ def test_the_files_section_lists_every_file_raw_at_the_stamp() -> None:
     assert "b" * 64 in by_name["payload.zip"]
     assert "b" * 64 not in by_name["manifest.sig"]
     assert "b" * 64 not in by_name["submission-manifest.json"]
+
+
+# ── the 2026-10-02 fold rows (F4/F5/F7/F9/F10, record-page surfaces) ──────────
+
+
+def test_key_validity_renders_none_recorded_when_either_bound_is_absent() -> None:
+    """F7 (reviewer R1): key_validity is optional — a publisher entry
+    missing either bound rendered an empty " to " window; both halves now
+    render the honest 'none recorded'."""
+    row = _row("northwind-instruments/northwind-psu")
+    module = _module()
+
+    def _validity_cell(page: str) -> str:
+        assert "Key validity</th><td>" in page
+        return page.split("Key validity</th><td>", 1)[1].split("</td>", 1)[0]
+
+    for entry in (
+        {"publisher_id": "northwind-instruments"},
+        {**PUBLISHER_ENTRY, "key_validity": {"not_before": "2026-01-01T00:00:00Z"}},
+        {**PUBLISHER_ENTRY, "key_validity": {"not_after": "2030-01-01T00:00:00Z"}},
+    ):
+        page = str(module.render_record_page(row, entry, FILES, SHA, _template()))
+        cell = _validity_cell(page)
+        assert "none recorded" in cell, f"an absent bound rendered as a window: {cell!r}"
+        assert " to " not in cell, cell
+    control = str(
+        module.render_record_page(row, PUBLISHER_ENTRY, FILES, SHA, _template())
+    )
+    assert "2026-01-01 to 2030-01-01" in _validity_cell(control)
+
+
+def test_download_hrefs_percent_encode_unsafe_file_names() -> None:
+    """F5 (lane A F4): a release file named report#2.md truncated at the
+    fragment (the href became …report + fragment 2.md) and report?q.md lost
+    its query — the name is percent-encoded in the href now; the DISPLAY
+    name stays the human-readable file name."""
+    row = _row("northwind-instruments/northwind-psu")
+    files = [
+        {"name": "manifest.json", "digest": ""},
+        {"name": "report#2.md", "digest": ""},
+        {"name": "report?q.md", "digest": ""},
+        {"name": "räport ü.md", "digest": ""},
+    ]
+    page = _render_record(row, files)
+    base = (
+        f"https://raw.githubusercontent.com/madeinoz67/benchweave-registry/{SHA}"
+        "/releases/benchweave-registry/northwind-instruments/northwind-psu/0.1.0"
+    )
+    assert f'href="{base}/report%232.md"' in page, "the # file name truncated"
+    assert f'href="{base}/report%3Fq.md"' in page, "the ? file name truncated"
+    assert f'href="{base}/r%C3%A4port%20%C3%BC.md"' in page, (
+        "the non-ASCII file name is not percent-encoded"
+    )
+    assert ">report#2.md<" in page, "the display name must stay readable"
+    assert ">räport ü.md<" in page
+
+
+def test_release_file_enumeration_skips_symlinks(tmp_path: Path) -> None:
+    """F5's second half: a symlink inside the release directory is not a
+    release file — enumeration lists regular files only (pre-fold a symlink
+    listed and linked raw)."""
+    root = tmp_path / "repo"
+    release = (
+        root / "releases" / "benchweave-registry" / "northwind-instruments"
+        / "northwind-psu" / "0.1.0"
+    )
+    release.mkdir(parents=True)
+    (release / "manifest.json").write_text("{}")
+    (release / "payload.zip").write_bytes(b"PK")
+    (release / "notes.md").write_text("real file")
+    (release / "link.md").symlink_to(release / "notes.md")
+    row = {
+        "registry_id": "benchweave-registry",
+        "package_id": "northwind-instruments/northwind-psu",
+        "version": "0.1.0",
+    }
+    names = [entry["name"] for entry in _module()._release_files(root, row)]
+    assert names == ["manifest.json", "notes.md", "payload.zip"], (
+        f"enumeration must list the regular files only, got {names}"
+    )
+    assert "link.md" not in names
+
+
+def test_the_unfired_record_render_strips_the_wordmark_markers() -> None:
+    """F10 on the record template: the unfired render carries no marker of
+    its family — the wordmark delimiters were stripped from the
+    structural-check copy only, the record begin/end delimiters are the
+    fragment's own wrappers. The fired posture keeps its wordmark
+    delimiters (the switch's documented state)."""
+    row = _row("northwind-instruments/northwind-psu")
+    page = _render_record(row, FILES)
+    for marker in (
+        "bw:wordmark begin",
+        "bw:wordmark end",
+        "bw:provenance -->",
+        "bw:record begin",
+        "bw:record end",
+    ):
+        assert marker not in page, f"a template marker survived the render: {marker}"
+    fired = _render_record(row, FILES, registry_mark=True)
+    assert "bw:wordmark begin" in fired and "bw:wordmark end" in fired
+
+
+def test_e2e_a_corrupt_recorded_key_refuses_typed_not_a_traceback(
+    tmp_path: Path,
+) -> None:
+    """F4 (lane A F3): a publisher entry whose PEM body is corrupt made the
+    generator die with a BARE ValueError traceback from
+    load_pem_public_key; the key path now refuses with the typed
+    page_signature_invalid: prefix naming the row."""
+    root, _private = _synthetic_repo(tmp_path)
+    publishers_path = root / "records" / "publishers.json"
+    document = json.loads(publishers_path.read_bytes())
+    document["publishers"][0]["ed25519_public_key_pem"] = (
+        "-----BEGIN PUBLIC KEY-----\nnot-a-key-body-at-all\n-----END PUBLIC KEY-----\n"
+    )
+    publishers_path.write_bytes(
+        json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+    )
+    result = _generate_site(root, tmp_path / "site")
+    assert result.returncode != 0, "a corrupt recorded key must refuse the deploy"
+    assert "page_signature_invalid:" in result.stderr, result.stderr
+    assert "benchweave-registry/quarrystone-labs/alpha-meter/1.0.0" in result.stderr, (
+        "the refusal names the row"
+    )
+    assert "Traceback" not in result.stderr, (
+        "the corrupt-key refusal must be typed, not a bare traceback"
+    )
+
+
+def test_e2e_colliding_detail_host_slugs_refuse_naming_both_rows(
+    tmp_path: Path,
+) -> None:
+    """F9 (lane B F3): the detail-host slug folds every non-[A-Za-z0-9-]
+    character to '-', so `quarrystone-labs/alpha-meter` and
+    `quarrystone-labs-alpha/meter` at one version — both index-schema-legal
+    identities — share one host id and two rows drill into ONE host.
+    Generation refuses, naming both rows (pre-fold it generated
+    silently)."""
+    root, _private = _synthetic_repo(tmp_path)
+    _write_release(
+        root, publisher="quarrystone-labs-alpha", plugin="meter", version="1.0.0",
+        private_key=None,
+    )
+    publishers_path = root / "records" / "publishers.json"
+    document = json.loads(publishers_path.read_bytes())
+    document["publishers"].append(
+        {
+            "publisher_id": "quarrystone-labs-alpha",
+            "github": "quarrystone-labs-alpha",
+            "namespace": "quarrystone-labs-alpha",
+            "ed25519_public_key_pem": document["publishers"][0][
+                "ed25519_public_key_pem"
+            ],
+            "vetted_at": "2026-10-01T00:00:00Z",
+        }
+    )
+    publishers_path.write_bytes(
+        json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+    )
+    result = _generate_site(root, tmp_path / "site")
+    assert result.returncode != 0, "colliding detail-host slugs must refuse"
+    assert "page_detail_id_collision:" in result.stderr, result.stderr
+    for label in (
+        "benchweave-registry/quarrystone-labs/alpha-meter/1.0.0",
+        "benchweave-registry/quarrystone-labs-alpha/meter/1.0.0",
+    ):
+        assert label in result.stderr, f"the refusal must name both rows: {label}"
+    assert not (tmp_path / "site" / "index.html").is_file(), (
+        "nothing deploys on refusal"
+    )
 
 
 # ── typed refusals (unit half) ────────────────────────────────────────────────
