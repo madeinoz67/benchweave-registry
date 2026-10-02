@@ -11,6 +11,12 @@ name: pages
 #   bytes — a deploy of commit X serves X's catalogue by construction;
 #   there is no committed page to drift;
 # - the browser arm gates the deploy: a red arm never ships;
+# - the deploy job runs ONLY on main and refuses a superseded run: a
+#   pre-deploy step fetches main's tip and refuses with `deploy_superseded:`
+#   when the run's own GITHUB_SHA is no longer it — re-running an old run
+#   must not ship a stale page over a newer deployment (fold R3);
+# - the Pages and id-token write grants live on the DEPLOY job alone; the
+#   validity job needs and gets read only (fold R9);
 # - a build failure leaves the previous deployment serving with a visible
 #   failed-action status — disclosed, not hidden; cache fidelity is
 #   GitHub's Pages pipeline (immutable per-deploy URLs; no app-level
@@ -23,8 +29,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -54,12 +58,33 @@ jobs:
 
   deploy:
     needs: validity
+    # Fold R3a: a workflow_dispatch on a branch reaches the validity job but
+    # must never ship a page — only main deploys.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    # Fold R9: the Pages/id-token write grants live HERE, on the only job
+    # that deploys; the validity job runs on the workflow-level read grant.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Refuse if main has moved (deploy_superseded)
+        # Fold R3b: the re-run of an old run must not ship a stale page over
+        # a newer deployment — this run's sha must still be main's tip.
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          main_tip="$(git rev-parse origin/main)"
+          if [ "$GITHUB_SHA" != "$main_tip" ]; then
+            echo "deploy_superseded: this run's $GITHUB_SHA is no longer main's tip $main_tip — refusing to deploy a stale page (re-run from the current tip)" >&2
+            exit 1
+          fi
+          echo "deploy current: $GITHUB_SHA is main's tip"
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:

@@ -152,11 +152,15 @@ function rowSlots(row) {
   };
 }
 
-/* The exact release directory (runtime-only: the committed href is the
-   literal-free versionless parent). */
-function releaseDirUrl(row) {
+/* The exact release directory (runtime-only), pinned to the page's own
+   provenance stamp (fold R7): the click-through must show the exact bytes
+   this page was generated from, matching the footer's stamp. ref is read
+   from the footer's data-bw-stamp at wiring time; the 'main' fallback never
+   applies on a rendered page (the generator refuses to build without a
+   real sha). */
+function releaseDirUrl(row, ref) {
   var base =
-    'https://github.com/madeinoz67/benchweave-registry/tree/main/releases/' +
+    'https://github.com/madeinoz67/benchweave-registry/tree/' + (ref || 'main') + '/releases/' +
     String(row.registry_id || '') +
     '/' +
     String(row.package_id || '');
@@ -189,6 +193,10 @@ if (typeof module !== 'undefined' && module.exports) {
   var emptyEl = document.getElementById('catalogue-empty');
   var noticeEl = document.getElementById('catalogue-notice');
   var template = list.querySelector('template[data-bw-template]');
+  /* R7: the page's own provenance stamp pins every release link's ref —
+     what the footer says the page was generated from is what links open. */
+  var stampEl = document.querySelector('[data-bw-stamp]');
+  var pageRef = stampEl ? stampEl.getAttribute('data-bw-stamp') : 'main';
   var rows = [];
   var cards = {}; // rowKey -> element
   var staticKeys = []; // rowKeys in the committed block, in order
@@ -244,7 +252,7 @@ if (typeof module !== 'undefined' && module.exports) {
     badgeRow(card, 'advisories', slots.advisories, slots['advisories-none']);
     badgeRow(card, 'markers', slots.markers, '');
     var link = card.querySelector('[data-bw-slot="evidence-link"]');
-    if (link) link.setAttribute('href', releaseDirUrl(row));
+    if (link) link.setAttribute('href', releaseDirUrl(row, pageRef));
   }
 
   function decorateStatic() {
@@ -260,7 +268,7 @@ if (typeof module !== 'undefined' && module.exports) {
       textSlot(card, 'digest', slots.digest, slots['digest-title']);
       textSlot(card, 'compat', slots.compat);
       var link = card.querySelector('[data-bw-slot="evidence-link"]');
-      if (link) link.setAttribute('href', releaseDirUrl(row));
+      if (link) link.setAttribute('href', releaseDirUrl(row, pageRef));
     });
   }
 

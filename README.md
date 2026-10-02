@@ -101,6 +101,17 @@ and the index regeneration in ONE commit — the window is zero by review. A
 direct push to `main` (if the branch ruleset ever allows one) carries the
 window until the next regeneration-and-deploy. The documented path is a PR.
 
+**Serving staleness, stated honestly (fold R8, critic F5).** A merged push
+deploys within minutes. What a reader's browser shows can additionally lag
+by the CDN and the browser cache — each up to roughly ten minutes beyond the
+deploy. If deploys keep FAILING, the previously deployed page serves for an
+unbounded window and no automated detector notices (the provenance stamp is
+the honest tell: compare the footer's `generated from <sha>` against the
+repository's `main` tip). The manual re-run / dispatch-a-stale-run
+regression is guarded as of fold R3 (main-only deploy job; a pre-deploy
+refusal when the run's sha is no longer main's tip). Automatic
+served-state reconciliation is deferred as `D-S2i` below.
+
 ### Slice 2 deferrals (homes and reopen triggers)
 
 | # | Deferred | Carrier | Reopen trigger |
@@ -113,6 +124,7 @@ window until the next regeneration-and-deploy. The documented path is a PR.
 | `D-S2f` | Icons in the catalogue (Lucide is the approved set; the page ships text-only) and a11y work beyond the floor (focus rings, labels, contrast are in; a screen-reader audit is not) | The vendored styleguide's iconography section | The first a11y audit or a design pass that wants them |
 | `D-S2g` | Sub-brand mark / domain cutover (`registry.benchweave.dev`, the Registry stack-glyph) | The vendored styleguide's Sub-brands section + the whole-page honesty arm (no glyph, no domain, no service claim) | The hosted registry service being real |
 | `D-S2h` | Advisories-only surface — today a yanked release's advisories vanish with its row (pinned as a documented reading by `tests/test_catalogue_page.py`) | Slice 4 / gateway issue #226 (response reach) | Its design pass |
+| `D-S2i` | Served-state reconciliation — a scheduled workflow curling the Pages URL, extracting the footer's `data-bw-stamp` and failing when it is not `main`'s tip (the unbounded stale-serving window above has no automatic detector) | This README's serving-staleness paragraph + the slice-2 pivot design record (gateway repo, `.claude/deep-review/2026-10-02-issue224-s2-pivot-registry-hosted-catalogue.md`) | The first observed stale-serving incident, or the owner's call |
 
 ## Family conventions
 

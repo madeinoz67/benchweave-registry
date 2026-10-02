@@ -14,6 +14,7 @@ wiring-level companion.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import re
@@ -455,10 +456,22 @@ def test_a_yanked_releases_advisory_appears_on_no_catalogue_surface(tmp_path: Pa
     (release / "manifest.json").write_bytes(
         json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     )
+    # Fold R1: the planted status documents carry the bound release block
+    # (the directory's identity + the manifest digest on disk).
+    manifest_digest = hashlib.sha256(
+        (release / "manifest.json").read_bytes()
+    ).hexdigest()
+    bound_release = {
+        "registry_id": "benchweave-registry",
+        "package_id": "northwind-instruments/alpha-tool",
+        "version": "1.0.0",
+        "manifest_sha256": manifest_digest,
+    }
     (release / "status.json").write_bytes(
         json.dumps(
             {
                 "lifecycle": "yanked",
+                "release": bound_release,
                 "advisories": [
                     {
                         "id": "BW-ADV-YANK-001",
@@ -485,7 +498,7 @@ def test_a_yanked_releases_advisory_appears_on_no_catalogue_surface(tmp_path: Pa
     # control: the same release NOT yanked surfaces the advisory — the pin
     # is about the yank's consequence, not about advisory rendering
     (release / "status.json").write_bytes(
-        json.dumps({"lifecycle": "published", "advisories": [
+        json.dumps({"lifecycle": "published", "release": bound_release, "advisories": [
             {
                 "id": "BW-ADV-YANK-001",
                 "severity": "high",
@@ -524,3 +537,48 @@ def test_the_committed_template_its_index_and_the_page_agree() -> None:
     assert len(_cards(page)) == len(defaults)
     for row in defaults:
         assert f'data-bw-package-id="{row["package_id"]}"' in page
+
+
+# ── fold R7/R10 (2026-10-02 round-2 refute) ───────────────────────────────────
+
+
+def test_card_release_links_pin_to_the_stamped_commit() -> None:
+    """R7 (critic F6): every card's release link points at the STAMPED
+    commit's tree, not `main` — the page's click-through must show the exact
+    bytes the page was generated from, matching its verifiability contract
+    (the footer says `generated from <sha>`; the links must not quietly
+    drift to whatever main holds today). The template's header nav link is
+    a browse link and stays on main by design."""
+    page = _render(FIXTURE.read_bytes())
+    cards = _cards(page)
+    assert cards, "precondition: default cards render"
+    for card in cards:
+        href = re.search(r'data-bw-slot="evidence-link"\s+href="([^"]+)"', card)
+        assert href is not None, "a card carries no evidence link"
+        assert href.group(1).startswith(
+            f"https://github.com/madeinoz67/benchweave-registry/tree/{SHA}/releases/"
+        ), f"card link is not stamped-commit-pinned: {href.group(1)}"
+    # the JS twin builds the same pinned shape (ref read from the page's own
+    # stamp at runtime; 'main' remains only as the no-JS fallback)
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    assert "function releaseDirUrl(row, ref)" in js, (
+        "plugins.js releaseDirUrl lost its ref parameter"
+    )
+    assert "data-bw-stamp" in js, "the wiring no longer reads the page's stamp"
+    assert "'https://github.com/madeinoz67/benchweave-registry/tree/' + (ref" in js or (
+        "tree/' + (ref" in js
+    ), "the JS URL base no longer carries the ref"
+
+
+def test_no_root_absolute_urls_in_the_template_or_wiring() -> None:
+    """R10 (critic F8): the template and the wiring never reference
+    root-absolute URLs (`src="/`, `href="/`, `fetch('/` and the double-quoted
+    fetch twin) — the page is served from a Pages subroot, a root-absolute
+    reference 404s there, and the loopback-served CI cannot catch the class;
+    this static refusal can."""
+    for name, text in (
+        ("catalogue/index.template.html", _template()),
+        ("catalogue/assets/plugins.js", PLUGINS_JS.read_text(encoding="utf-8")),
+    ):
+        for literal in ('src="/', 'href="/', "fetch('/", 'fetch("/'):
+            assert literal not in text, f"{name} carries the root-absolute form {literal!r}"

@@ -110,7 +110,8 @@ def generate(root: Path) -> bytes:
             if len(parts) != 5 or parts[-1] != "manifest.json":
                 continue
             _registry_id, publisher, plugin, version, _name = parts
-            manifest = json.loads(manifest_path.read_bytes())
+            manifest_bytes = manifest_path.read_bytes()
+            manifest = json.loads(manifest_bytes)
             # Fold M3: identity comes from the PATH and the manifest must
             # agree; duplicate identities refuse.
             row_key = (publisher, plugin, version)
@@ -151,15 +152,27 @@ def generate(root: Path) -> bytes:
             #     row — the exact HIGH all four refute lanes flagged), so
             #     `Yanked`, `yank`, `retired`, null, a list value, or a
             #     missing lifecycle key all refuse, naming the row;
-            #   - a status document that is not parseable JSON or not an
-            #     object refuses with `index_status_unparseable:` (typed;
-            #     never a bare traceback);
+            #   - a status document that is not parseable JSON, not an
+            #     object, or NOT A REGULAR FILE refuses with
+            #     `index_status_unparseable:` (typed; never a bare
+            #     traceback) — a directory-shaped status.json never reads
+            #     as absent (fold R4, round-2 refute);
+            #   - a PRESENT status document is BOUND to its directory: the
+            #     schema-required release block must equal the directory's
+            #     identity plus the manifest digest on disk — mismatch
+            #     refuses with `index_status_mismatch:` (fold R1);
             #   - an ABSENT status.json keeps the row (the dogfood's shape,
             #     unchanged). Zero format motion: only which rows exist.
             status_path = release_dir / "status.json"
+            row_id = f"{publisher}/{plugin}/{version}"
+            if status_path.exists() and not status_path.is_file():
+                problems.append(
+                    f"index_status_unparseable:{row_id}: "
+                    "status path is present but not a regular file"
+                )
+                continue
             status: dict[str, Any] = {}
             if status_path.is_file():
-                row_id = f"{publisher}/{plugin}/{version}"
                 try:
                     parsed_status: Any = json.loads(status_path.read_bytes())
                 except ValueError as exc:
@@ -172,6 +185,19 @@ def generate(root: Path) -> bytes:
                     )
                     continue
                 status = parsed_status
+                expected_release: dict[str, str] = {
+                    "registry_id": str(parts[0]),
+                    "package_id": f"{publisher}/{plugin}",
+                    "version": str(version),
+                    "manifest_sha256": sha256_hex(manifest_bytes),
+                }
+                claimed_release: object = status.get("release")
+                if claimed_release != expected_release:
+                    problems.append(
+                        f"index_status_mismatch:{row_id}: "
+                        f"names {claimed_release!r}, governs {expected_release}"
+                    )
+                    continue
                 lifecycle: Any = status.get("lifecycle")
                 if lifecycle not in LIFECYCLE_ENUM:
                     problems.append(f"index_status_invalid:{lifecycle!r} ({row_id})")
@@ -195,7 +221,7 @@ def generate(root: Path) -> bytes:
                     "version": manifest["version"],
                     "kind": review_record.get("kind", "admitted-release"),
                     "publisher": manifest.get("publisher_id", publisher),
-                    "manifest_sha256": sha256_hex(manifest_path.read_bytes()),
+                    "manifest_sha256": sha256_hex(manifest_bytes),
                     "signature_state": publish.get(
                         "signature_state",
                         "signed-valid" if (release_dir / "manifest.sig").is_file() else "unsigned",

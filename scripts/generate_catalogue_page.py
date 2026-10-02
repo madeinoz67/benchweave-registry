@@ -109,13 +109,17 @@ def _short(value: str) -> str:
     return value[:TRUNCATE_AT] + "…" if len(value) > TRUNCATE_AT else value
 
 
-def _release_dir_url(row: dict[str, Any]) -> str:
-    """The versionless releases directory of the row's package; the page's
-    wiring upgrades the href to the exact version directory at runtime."""
+def _release_dir_url(row: dict[str, Any], ref: str) -> str:
+    """The versionless releases directory of the row's package AT THE STAMPED
+    COMMIT (fold R7, critic F6): the page's click-through must show the exact
+    bytes the page was generated from, matching the footer's `generated from
+    <sha>` verifiability claim — a `main` link quietly drifts to whatever
+    main holds today. The page's wiring upgrades the href to the exact
+    version directory at runtime."""
     registry_id = str(row.get("registry_id") or "")
     package_id = str(row.get("package_id") or "")
     return (
-        f"https://github.com/madeinoz67/benchweave-registry/tree/main/releases"
+        f"https://github.com/madeinoz67/benchweave-registry/tree/{ref}/releases"
         f"/{registry_id}/{package_id}"
     )
 
@@ -155,11 +159,12 @@ def _markers_html(row: dict[str, Any]) -> str:
     )
 
 
-def _card(row: dict[str, Any], *, blank: bool = False) -> str:
+def _card(row: dict[str, Any], *, sha: str, blank: bool = False) -> str:
     """One catalogue card. ``blank`` renders the hidden template card: the
     same shape with every slot empty, cloned by the page's JS for rows the
     static bytes do not carry (so one shape source — this generator —
-    serves both the generated and the on-demand cards)."""
+    serves both the generated and the on-demand cards). ``sha`` pins the
+    card's release link to the stamped commit (fold R7)."""
     kind = str(row.get("kind") or "")
     package_id = str(row.get("package_id") or "")
     if not blank and kind not in KIND_DISPLAY:
@@ -214,7 +219,7 @@ def _card(row: dict[str, Any], *, blank: bool = False) -> str:
     )
     evidence_link = (
         '<a class="spec-link" data-bw-slot="evidence-link" '
-        f'href="{_esc(_release_dir_url(row))}">release files →</a>'
+        f'href="{_esc(_release_dir_url(row, sha))}">release files →</a>'
     )
     return "\n".join(
         [
@@ -261,12 +266,13 @@ def _rows_from(index_bytes: bytes) -> list[dict[str, Any]]:
     return rows
 
 
-def render_cards(index_bytes: bytes) -> str:
+def render_cards(index_bytes: bytes, sha: str) -> str:
     """The cards block for the given index bytes (pure; no filesystem).
 
     The hidden template card plus one card per default-view row; zero
     default rows render the honest-empty sentence instead — never an empty
-    page. Row kinds outside ``KIND_DISPLAY`` refuse, naming the row.
+    page. Row kinds outside ``KIND_DISPLAY`` refuse, naming the row. The
+    ``sha`` pins every card's release link to the stamped commit (R7).
     """
     rows = _rows_from(index_bytes)
     for row in rows:
@@ -277,9 +283,9 @@ def render_cards(index_bytes: bytes) -> str:
                 f"({row.get('package_id') or 'row'})"
             )
     defaults = [row for row in rows if _default_row(row)]
-    parts = [f'<template data-bw-template>\n{_card({}, blank=True)}\n</template>']
+    parts = [f'<template data-bw-template>\n{_card({}, blank=True, sha=sha)}\n</template>']
     for row in defaults:
-        parts.append(_card(row))
+        parts.append(_card(row, sha=sha))
     if not defaults:
         parts.append(f'<p class="catalogue-empty-static">{HONEST_EMPTY}</p>')
     return "\n".join(parts)
@@ -326,7 +332,7 @@ def render_page(index_bytes: bytes, template: str, sha: str) -> str:
     provenance stamp and the card chrome (the blank render); the cards'
     row data rides between the markers as data.
     """
-    _check_structural(_card({}, blank=True), "the card chrome")
+    _check_structural(_card({}, blank=True, sha=sha), "the card chrome")
     _check_structural(_stamp_html(sha), "the provenance stamp")
     if template.count(CARDS_BEGIN) != 1 or template.count(CARDS_END) != 1:
         raise SystemExit(
@@ -342,7 +348,7 @@ def render_page(index_bytes: bytes, template: str, sha: str) -> str:
     _, tail = rest.split(CARDS_END, 1)
     chrome = head + tail.replace(PROVENANCE_MARKER, "", 1)
     _check_structural(chrome, "catalogue/index.template.html (structural chrome)")
-    cards = render_cards(index_bytes)
+    cards = render_cards(index_bytes, sha)
     page = head + cards + tail
     return page.replace(PROVENANCE_MARKER, _stamp_html(sha), 1)
 

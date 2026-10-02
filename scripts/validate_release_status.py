@@ -63,6 +63,13 @@ def main() -> int:
         rel = path.relative_to(root)
         try:
             document = json.loads(path.read_bytes())
+        except OSError as exc:
+            # Fold R4 (lane A F3): a directory-shaped or otherwise unreadable
+            # status.json refuses typed — IsADirectoryError is an OSError and
+            # used to surface as a bare traceback instead of a finding.
+            print(f"validate_release_status: status_invalid: {rel}: unopenable: {exc}")
+            failures += 1
+            continue
         except ValueError as exc:
             print(f"validate_release_status: status_invalid: {rel}: unparseable JSON: {exc}")
             failures += 1

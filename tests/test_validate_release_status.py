@@ -26,8 +26,13 @@ VALIDATOR = REPO / "scripts" / "validate_release_status.py"
 PIN = REPO / "vendored" / "gateway" / "release-status.pin.json"
 COPY = REPO / "vendored" / "gateway" / "release-status.schema.json"
 
-#: The vendored bytes' origin, as recorded in the pin record.
-ORIGIN = "madeinoz67/benchweave@c90f9f3:standards/registry/0.1.1/release-status.schema.json"
+#: The vendored bytes' origin, as recorded in the pin record (fold R6: a
+#: gateway MAIN commit — the digest was measured byte-identical at the branch
+#: tip and at main, so citing the unmerged branch tip was the fragile form).
+ORIGIN = (
+    "madeinoz67/benchweave@ece47b92d211342246cc6ba67a4ae3a72bc1fb80"
+    ":standards/registry/0.1.1/release-status.schema.json"
+)
 
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
@@ -177,3 +182,20 @@ def test_validator_runs_from_a_bare_checkout(tmp_path: Path) -> None:
     )
     assert result.returncode == 1
     assert "status_invalid:" in result.stdout + result.stderr
+
+
+def test_directory_shaped_status_document_refuses_typed(tmp_path: Path) -> None:
+    """R4 (lane A F3): a status.json present as a DIRECTORY refuses with the
+    typed prefix — the pre-fold walk died on a bare IsADirectoryError
+    traceback instead of naming the document."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    release = _release(b"{}", root)
+    (release / "status.json").unlink()
+    (release / "status.json").mkdir()
+    result = _run("--root", str(root))
+    assert result.returncode == 1, result.stdout + result.stderr
+    combined = result.stdout + result.stderr
+    assert "status_invalid:" in combined, combined
+    assert "Traceback" not in combined, "a bare traceback instead of a typed refusal"
+    assert "IsADirectoryError" not in combined

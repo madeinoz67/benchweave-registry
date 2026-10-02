@@ -8,6 +8,7 @@ never a reshape.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -160,10 +161,31 @@ def _fixture_release(
         json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     )
     if status is not None:
-        (release / "status.json").write_bytes(
-            json.dumps(status, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-        )
+        # Fold R1: every planted status document carries the BOUND release
+        # block (the directory's identity + the manifest digest on disk), so
+        # the plants are documents the vendored schema admits and the arms
+        # exercise what they name — lifecycle polarity, drift, advisories —
+        # never an accidental binding refusal.
+        bound = dict(status)
+        bound["release"] = _bound_release_block(release, plugin, version)
+        (release / "status.json").write_bytes(_canon(bound))
     return release
+
+
+def _bound_release_block(release: Path, plugin: str, version: str) -> dict[str, str]:
+    """The release block R1 binds every status document to: the directory's
+    own identity plus the manifest digest actually on disk."""
+    manifest_digest = hashlib.sha256((release / "manifest.json").read_bytes()).hexdigest()
+    return {
+        "registry_id": "benchweave-registry",
+        "package_id": f"northwind-instruments/{plugin}",
+        "version": version,
+        "manifest_sha256": manifest_digest,
+    }
+
+
+def _canon(obj: object) -> bytes:
+    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode() + b"\n"
 
 
 def _row_ids(root: Path) -> list[str]:
@@ -258,9 +280,9 @@ def test_records_edit_without_regeneration_refuses(tmp_path: Path) -> None:
     release = _fixture_release(root)
     first = _run("--root", str(root))
     assert first.returncode == 0, first.stderr
-    (release / "status.json").write_bytes(
-        json.dumps({"lifecycle": "yanked"}).encode() + b"\n"
-    )
+    yanked: dict[str, object] = {"lifecycle": "yanked"}
+    yanked["release"] = _bound_release_block(release, "alpha-tool", "1.0.0")
+    (release / "status.json").write_bytes(_canon(yanked))
     check = _run("--check", "--root", str(root))
     assert check.returncode == 1, check.stdout + check.stderr
     assert "index_drift" in check.stderr
@@ -299,25 +321,32 @@ def test_a_submitted_not_accepted_submission_produces_no_index_row(tmp_path: Pat
 # are disclosed in place.
 
 
-def _status_bytes(case: str) -> bytes | None:
-    """The status.json bytes for a matrix row (None = no file)."""
+def _status_bytes(case: str, release: Path) -> bytes | None:
+    """The status.json bytes for a matrix row (None = no file). Every
+    parseable row carries the BOUND release block (fold R1) so the matrix
+    exercises the lifecycle polarity, not the binding refusal — the binding
+    has its own arms below."""
     if case == "absent":
         return None
     if case == "malformed":
         return b"not json at all"
     if case == "non-object":
         return b'["yanked"]'
+    # Beyond the named eleven: a present status document whose lifecycle key
+    # is missing. Fail-closed here too — a present-but-unreadable lifecycle
+    # is not an absent one (the validity step owns the schema shape; the
+    # generator refuses rather than guessing benign).
+    doc: dict[str, object]
     if case == "key-absent":
-        # Beyond the named eleven: a present status document whose lifecycle
-        # key is missing. Fail-closed here too — a present-but-unreadable
-        # lifecycle is not an absent one (the validity step owns the schema
-        # shape; the generator refuses rather than guessing benign).
-        return json.dumps({"reason": "lifecycle key absent"}).encode()
-    if case == "null":
-        return json.dumps({"lifecycle": None}).encode()
-    if case == "array":
-        return json.dumps({"lifecycle": ["yanked"]}).encode()
-    return json.dumps({"lifecycle": case}).encode()
+        doc = {"reason": "lifecycle key absent"}
+    elif case == "null":
+        doc = {"lifecycle": None}
+    elif case == "array":
+        doc = {"lifecycle": ["yanked"]}
+    else:
+        doc = {"lifecycle": case}
+    doc["release"] = _bound_release_block(release, "alpha-tool", "1.0.0")
+    return _canon(doc)
 
 
 @pytest.mark.parametrize(
@@ -351,7 +380,7 @@ def test_status_boundary_matrix(case: str, polarity: str, tmp_path: Path) -> Non
     root = tmp_path / "repo"
     root.mkdir()
     release = _fixture_release(root)
-    status_bytes = _status_bytes(case)
+    status_bytes = _status_bytes(case, release)
     if status_bytes is not None:
         (release / "status.json").write_bytes(status_bytes)
     result = _run("--root", str(root))
@@ -396,9 +425,86 @@ def test_out_of_enum_status_does_not_take_the_whole_run_down(tmp_path: Path) -> 
     root.mkdir()
     _fixture_release(root, plugin="beta-tool")
     bad = _fixture_release(root, plugin="alpha-tool")
-    (bad / "status.json").write_bytes(json.dumps({"lifecycle": "retired"}).encode())
+    retired: dict[str, object] = {"lifecycle": "retired"}
+    retired["release"] = _bound_release_block(bad, "alpha-tool", "1.0.0")
+    (bad / "status.json").write_bytes(_canon(retired))
     result = _run("--root", str(root))
     assert result.returncode == 1
     assert "index_status_invalid:'retired'" in result.stderr
     assert "northwind-instruments/alpha-tool" in result.stderr, "the refusal must name the row"
     assert not (root / "index.json").exists(), "a refused run must write no index"
+
+
+# ── fold R1/R4 (2026-10-02 round-2 refute): bind every status document ────────
+#
+# R1 (lane A F1, MED): the vendored schema REQUIRES release{registry_id,
+# package_id, version, manifest_sha256} on every status document, but nothing
+# consumed it — a status.json naming a DIFFERENT release (or pinning another
+# release's manifest digest) governed this directory's row with every gate
+# green. The binding below makes the generator refuse with the typed prefix
+# `index_status_mismatch:`. status.json stays the single catalogue authority
+# (Q8); the binding is what ties a document to the release it governs.
+#
+# R4 (lane A F3, LOW): a present-but-not-regular-file status.json is a typed
+# refusal (`index_status_unparseable:`), never a silently-absent one.
+
+
+def test_status_document_naming_a_different_release_refuses(tmp_path: Path) -> None:
+    """R1: the release block is binding, not decoration."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    release = _fixture_release(root)
+    status: dict[str, object] = {"lifecycle": "published"}
+    status["release"] = _bound_release_block(release, "alpha-tool", "1.0.0")
+    assert isinstance(status["release"], dict)
+    status["release"]["package_id"] = "northwind-instruments/other-tool"
+    (release / "status.json").write_bytes(_canon(status))
+    result = _run("--root", str(root))
+    assert result.returncode == 1, (
+        f"a status document naming another release kept every gate green:\n"
+        f"{result.stdout + result.stderr}"
+    )
+    assert "index_status_mismatch:" in result.stderr, result.stderr
+    assert "other-tool" in result.stderr, "the refusal must name the claimed release"
+
+
+def test_status_document_pinning_a_foreign_manifest_digest_refuses(tmp_path: Path) -> None:
+    """R1's second arm: the names agree but the pinned manifest digest is not
+    this release's — the document governs bytes that are not on disk."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    release = _fixture_release(root)
+    status: dict[str, object] = {"lifecycle": "published"}
+    status["release"] = _bound_release_block(release, "alpha-tool", "1.0.0")
+    assert isinstance(status["release"], dict)
+    status["release"]["manifest_sha256"] = "0" * 64
+    (release / "status.json").write_bytes(_canon(status))
+    result = _run("--root", str(root))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "index_status_mismatch:" in result.stderr, result.stderr
+
+
+def test_bound_status_document_governs_its_row(tmp_path: Path) -> None:
+    """R1 control arm: a correctly-bound published document keeps the row —
+    the binding refuses mismatch, it does not refuse status documents."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    _fixture_release(root, status={"lifecycle": "published"})
+    assert _row_ids(root) == ["northwind-instruments/alpha-tool"]
+
+
+def test_directory_shaped_status_refuses_instead_of_reading_as_absent(
+    tmp_path: Path,
+) -> None:
+    """R4: `status.json` present as a DIRECTORY is a typed refusal — the
+    pre-fold generator's `is_file()` read it as absent and kept the row."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    release = _fixture_release(root)
+    (release / "status.json").mkdir()
+    result = _run("--root", str(root))
+    assert result.returncode == 1, (
+        f"a directory-shaped status.json read as absent:\n{result.stdout + result.stderr}"
+    )
+    assert "index_status_unparseable:" in result.stderr, result.stderr
+    assert "Traceback" not in result.stderr, "a bare traceback instead of a typed refusal"
