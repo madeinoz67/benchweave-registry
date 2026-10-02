@@ -6,6 +6,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import verify as V  # noqa: E402
 
@@ -53,3 +55,27 @@ def test_unsigned_label_with_a_signature_file_is_caught(tmp_path: Path) -> None:
     )
     findings, _chains = V.verify_releases(sandbox)
     assert any(f.startswith("signature_unexpected:") for f in findings), findings
+
+
+# ── C6 (issue #225 slice 3): the chain carries the lifecycle timeline ─────────
+
+
+def test_chain_carries_the_lifecycle_event_timeline(tmp_path: Path) -> None:
+    """§2.6: beside publisher/reviewer/outcome/signature/closure/capabilities,
+    the chain now prints the release's lifecycle event timeline, sourced from
+    the already-validated records — one field, nothing new to trust."""
+    sandbox = _sandbox(tmp_path)
+    findings, chains = V.verify_releases(sandbox)
+    assert findings == [], findings
+    assert chains[0]["lifecycle_events"] == [
+        {"op": "publish", "actor": "madeinoz67", "at": "2026-10-01T00:00:00Z"}
+    ], chains[0]
+
+
+def test_chain_output_prints_the_timeline(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    assert V.main([str(sandbox)]) == 0
+    out = capsys.readouterr().out
+    assert "lifecycle=publish" in out, out
