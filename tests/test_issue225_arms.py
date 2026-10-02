@@ -292,7 +292,7 @@ def test_similarity_vectors_are_pinned_by_the_truth_table() -> None:
     vectors = rules["similarity_rule"]["vectors"]
     table = json.loads((FIXTURES / "namespace-vetting.truth-table.json").read_bytes())
     inputs = {row["input"] for row in table["rows"] if row["surface"] == "similarity-rule"}
-    assert len(inputs) == len(vectors) == 5
+    assert len(inputs) == len(vectors) == 7  # five at v1; sim-v6/sim-v7 fold-added
 
 
 # ── gate arms: the tree-level validity checks (design §2.4) ───────────────────
@@ -313,10 +313,9 @@ def _gate_tree(tmp_path: Path) -> Path:
     return root
 
 
-def _plant(root: Path, record: dict[str, Any]) -> None:
+def _plant(root: Path, record: dict[str, Any], seq: int = 1) -> None:
     lc = record.get("lifecycle") or record.get("review", {})
     sub = "lifecycle" if record.get("record_type") == "lifecycle" else "submissions"
-    seq = "1"
     target = root / "records" / sub / lc["publisher"] / lc["plugin"] / lc["version"]
     target.mkdir(parents=True, exist_ok=True)
     (target / f"{seq}-{lc.get('op', 'review')}.json").write_bytes(
@@ -469,18 +468,44 @@ def test_coherent_yank_passes(tmp_path: Path) -> None:
     assert _findings(root) == []
 
 
-def test_yank_sequence_mismatch_refuses(tmp_path: Path) -> None:
-    """The record cites the status revision it corresponds to; a stale
-    sequence number does not govern the served document."""
+def test_yank_citing_a_future_status_revision_refuses(tmp_path: Path) -> None:
+    """Ordering, not equality (fold row 1): the record must not claim a
+    status revision NEWER than the served document."""
     root = _gate_tree(tmp_path)
     _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
              status={"lifecycle": "yanked", "sequence": 4})
     _plant(root, lifecycle_record(
         "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
-        extra={"release_manifest_sha256": HEX64, "status_sequence": 2},
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 5},
     ))
     findings = _findings(root)
     assert any(f.startswith("yank_status_sequence_mismatch:") for f in findings), findings
+
+
+def test_yank_then_advise_tree_is_valid(tmp_path: Path) -> None:
+    """Fold row 1's RED arm (critic F1): yank@seq2 + advise@seq3 - the
+    CVE-documentation pattern §2.3 invites by preserving advisories through
+    yank. Equality pinned this tree red forever; ordering keeps it
+    representable (record cites 2 <= served 3, lifecycle yanked)."""
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "yanked", "sequence": 3, "advisories": [
+                 {"id": "BW-ADV-001", "severity": "medium",
+                  "summary": "s", "url": "https://example.invalid/b"}
+             ]})
+    _plant(root, lifecycle_record(
+        "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 2},
+    ), seq=2)
+    _plant(root, lifecycle_record(
+        "advisory", publisher="northwind-instruments", plugin="alpha-tool",
+        version="1.0.0",
+        extra={"advisory": {
+            "id": "BW-ADV-001", "severity": "medium",
+            "summary": "s", "url": "https://example.invalid/b",
+        }},
+    ), seq=3)
+    assert _findings(root) == []
 
 
 def test_advisory_absent_from_served_status_refuses(tmp_path: Path) -> None:
@@ -530,10 +555,28 @@ def test_withdraw_after_publication_refuses(tmp_path: Path) -> None:
         publisher="northwind-instruments", plugin="beta-tool", version="1.0.0"
     )
     publish["record_version"] = "1.1.0"
-    _plant(root, publish)
+    _plant(root, publish, seq=1)
     _plant(root, lifecycle_record(
         "withdraw", publisher="northwind-instruments", plugin="beta-tool", version="1.0.0",
-    ))
+    ), seq=2)
+    findings = _findings(root)
+    assert any(f.startswith("withdraw_after_publication:") for f in findings), findings
+
+
+def test_withdraw_at_higher_numeric_seq_still_refuses(tmp_path: Path) -> None:
+    """Fold row 2's RED arm (critic F2): "10-withdraw.json" sorts BEFORE
+    "2-publish.json" lexicographically, so a single mid-pass evaluation of
+    the CR-32 arm saw the withdraw before the publish existed."""
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "beta-tool", "1.0.0")
+    publish = publish_record(
+        publisher="northwind-instruments", plugin="beta-tool", version="1.0.0"
+    )
+    publish["record_version"] = "1.1.0"
+    _plant(root, publish, seq=2)
+    _plant(root, lifecycle_record(
+        "withdraw", publisher="northwind-instruments", plugin="beta-tool", version="1.0.0",
+    ), seq=10)
     findings = _findings(root)
     assert any(f.startswith("withdraw_after_publication:") for f in findings), findings
 
@@ -595,16 +638,80 @@ def test_coherent_transfer_passes(tmp_path: Path) -> None:
 
 
 def test_similarity_vectors_hold_under_the_committed_rule() -> None:
-    """The five lane-rules vectors, each run against the comparison set its
-    expected label types (the truth table's disclosed reading)."""
+    """The committed lane-rules vectors, each run against the comparison set
+    its expected label types (the truth table's disclosed reading). Fold row
+    5 added the skeleton-equal confusable and a containment cell (seven)."""
+    rules = json.loads((REPO / "lane-rules.json").read_bytes())
+    vectors = rules["similarity_rule"]["vectors"]
+    assert len(vectors) == 7, [v["candidate"] for v in vectors]
     table = json.loads((FIXTURES / "namespace-vetting.truth-table.json").read_bytes())
     rows = {row["input"]: row for row in table["rows"]
             if row["surface"] == "similarity-rule"}
-    for vector in json.loads((REPO / "lane-rules.json").read_bytes())["similarity_rule"]["vectors"]:
+    for vector in vectors:
         key = next(k for k in rows if k.startswith(vector["candidate"] + " "))
         row = rows[key]
         verdict = vr.namespace_verdict(
             vector["candidate"], vector["existing"],
             reserved=row["comparison_set"] == "reserved",
+            rules=rules,
         )
         assert verdict == row["expected"], (vector, verdict, row["expected"])
+
+
+# ── fold rows 3/4/8: fail-closed authorities, seq uniqueness, equality ────────
+
+
+def test_gate_refuses_when_authorities_are_absent(tmp_path: Path) -> None:
+    """Fold row 3 (critic M3/F4): records without their authorities are
+    §1.2's vacuity class reborn - the gate was green with unvetted and
+    reserved records planted, because nothing forced the authority files
+    to exist."""
+    root = _gate_tree(tmp_path)
+    (root / "records" / "publishers.json").unlink()
+    (root / "lane-rules.json").unlink()
+    _plant(root, publish_record(publisher="driftwood-labs", plugin="widget"))
+    findings = _findings(root)
+    assert any(f.startswith("authority_absent:records/publishers.json") for f in findings), findings
+    assert any(f.startswith("authority_absent:lane-rules.json") for f in findings), findings
+
+
+def test_duplicate_record_sequences_refuse(tmp_path: Path) -> None:
+    """Fold row 4 (critic M1b/F3): two records at one numeric sequence on
+    one release must not merge silently. Gap-free stays optional - a
+    documented choice, not an arm."""
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "beta-tool", "1.0.0")
+    _plant(root, lifecycle_record(
+        "withdraw", publisher="northwind-instruments", plugin="beta-tool", version="1.0.0",
+    ), seq=4)
+    _plant(root, lifecycle_record(
+        "yank", publisher="northwind-instruments", plugin="beta-tool", version="1.0.0",
+        extra={"release_manifest_sha256": HEX64, "status_sequence": 5},
+    ), seq=4)
+    findings = _findings(root)
+    assert any(f.startswith("record_seq_duplicate:") for f in findings), findings
+
+
+def test_publisher_namespace_equality_is_pinned(tmp_path: Path) -> None:
+    """Fold row 8 (conditional): every committed + fixture entry carries
+    publisher_id == namespace (verified by hand before folding), so the
+    equality is pinned. A divergent claim refuses - cross-field equality is
+    not expressible in JSON Schema 2020-12, so the arm lives in the gate."""
+    root = _gate_tree(tmp_path)
+    _plant_publishers_entry(root, "tidewater-probes", "tide-probes")
+    findings = _findings(root)
+    assert any(
+        f.startswith("publisher_namespace_mismatch:") for f in findings
+    ), findings
+
+
+def test_committed_and_fixture_publishers_carry_the_equality() -> None:
+    """Row 8's CHECK arm: universally true in the committed data and the
+    queue fixture before the fold landed."""
+    committed = json.loads((REPO / "records" / "publishers.json").read_bytes())
+    fixture = json.loads(
+        (FIXTURES / "queue-records" / "records" / "publishers.json").read_bytes()
+    )
+    for document in (committed, fixture):
+        for entry in document["publishers"]:
+            assert entry["publisher_id"] == entry["namespace"], entry

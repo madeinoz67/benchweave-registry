@@ -47,6 +47,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -338,7 +339,7 @@ def _replay_real_tree(args: argparse.Namespace, gw: SimpleNamespace) -> int:
             continue
         try:
             key.verify(sig_path.read_bytes(), signed_path.read_bytes())
-        except Exception:
+        except InvalidSignature:
             print(
                 f"replay_admission: publisher_signature_invalid: {label}",
                 file=sys.stderr,

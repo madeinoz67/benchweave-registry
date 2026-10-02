@@ -1,1 +1,199 @@
-{"note":"Hand-derived BEFORE any gate code (design \u00a75 ordering law). Each row names the surface that enforces it and the expected finding prefix (or pass). The similarity rows pin the lane-rules.json committed vectors: each vector's expected label ALSO types the comparison set it exercises - 'reserved' rows run against reserved_namespaces, 'lookalike'/'distinct' rows run against the vetted-namespace comparison - resolving the role ambiguity a flat list carries (benchweave sits in the reserved list yet vectors 1-2 exercise it as an incumbent vetted namespace; disclosed in the slice record).","rows":[{"comparison_set":"vetted","expected":"lookalike","id":"sim-v1","input":"benchweave-labs vs benchweave (skeleton containment)","surface":"similarity-rule"},{"comparison_set":"vetted","expected":"lookalike","id":"sim-v2","input":"benchwave vs benchweave (skeleton edit distance 1)","surface":"similarity-rule"},{"comparison_set":"reserved","expected":"reserved","id":"sim-v3","input":"otdp-tools vs otdp (skeleton containment of a reserved name)","surface":"similarity-rule"},{"comparison_set":"vetted","expected":"lookalike","id":"sim-v4","input":"madeinoz68 vs madeinoz67 (skeleton edit distance 1)","surface":"similarity-rule"},{"comparison_set":"vetted","expected":"distinct","id":"sim-v5","input":"acme-power vs madeinoz67 (distinct)","surface":"similarity-rule"},{"expected_finding":"namespace_reserved:","id":"ns-01","input":"publishers.json entry claiming namespace 'benchweave' (reserved exact)","surface":"vetting-gate"},{"expected_finding":"namespace_reserved:","id":"ns-02","input":"publishers.json entry claiming namespace 'otdp-tools' (extends reserved)","surface":"vetting-gate"},{"expected_finding":"namespace_lookalike:","id":"ns-03","input":"publishers.json entry 'northwind-instrumentz' near vetted 'northwind-instruments'","surface":"vetting-gate"},{"expected_finding":"namespace_collision:","id":"ns-04","input":"two publishers.json entries claiming one namespace","surface":"vetting-gate"},{"expected_finding":"publisher_unvetted:","id":"ns-05","input":"record whose publisher is not a vetted publishers.json entry","surface":"records-gate"},{"expected_finding":"namespace_reserved:","id":"ns-06","input":"lifecycle record for reserved plugin 'sim-psu'","surface":"records-gate"},{"expected_finding":"namespace_collision:","id":"ns-07","input":"publisher B's publish record claiming A's published package id","surface":"records-gate"},{"expected_finding":"vetting_row_unknown:","id":"vt-01","input":"publishers.json entry citing unknown checklist row 'V-99'","surface":"vetting-gate"},{"expected":"pass","id":"vt-02","input":"the committed fixture publishers.json (both entries, all six V-rows)","surface":"vetting-gate"},{"expected_finding":"yank_status_absent:","id":"lc-01","input":"yank record whose release has no status document","surface":"records-gate"},{"expected_finding":"yank_status_absent:","id":"lc-02","input":"yank record whose release status lifecycle is 'published'","surface":"records-gate"},{"expected_finding":"status_yank_unrecorded:","id":"lc-03","input":"status document lifecycle yanked with no yank record","surface":"records-gate"},{"expected_finding":"advisory_status_absent:","id":"lc-04","input":"advisory record whose advisory id is absent from the served status advisories[]","surface":"records-gate"},{"expected_finding":"withdraw_after_publication:","id":"lc-05","input":"withdraw record for a submission with a publish record","surface":"records-gate"},{"expected":"pass","id":"lc-06","input":"coherent yank: record + status yanked + matching status_sequence","surface":"records-gate"},{"expected_finding":"transfer_receiver_unvetted:","id":"tr-01","input":"transfer record to an unvetted publisher","surface":"records-gate"},{"expected_finding":"transfer_vetting_unresolved:","id":"tr-02","input":"transfer whose vetting_reference does not resolve to the receiver's vetting citation","surface":"records-gate"},{"expected_finding":"transfer_consents_incomplete:","id":"tr-03","input":"transfer whose consents do not name both publishers","surface":"records-gate"},{"expected":"pass","id":"tr-04","input":"coherent transfer: both consents, receiver vetted, reference resolves","surface":"records-gate"},{"expected":"row dropped; status document untouched","id":"ix-01","input":"release with an unlist record, status published","surface":"index-generator"},{"expected":"row dropped (record-driven; admissibility unchanged)","id":"ix-02","input":"release with an unlist record, no status document","surface":"index-generator"},{"expected":"row kept (status documents are the generator's only yank authority, Q8)","id":"ix-03","input":"release with a yank record but no status document","surface":"index-generator"},{"expected":"row kept, advisories surfaced on the row","id":"ix-04","input":"release with an advisory in its status document","surface":"index-generator"}],"table_version":1}
+{
+  "note": "Hand-derived BEFORE any gate code (design \u00a75 ordering law; v1). Version 2 is the fold-wave table-defect repair (2026-10-02 coordinator directive, revw[2]+critic findings): row lc-06's equality pin is repaired to ORDERING \u2014 \u00a72.3's own intent text is 'mirroring exactly what the resolver enforces', and the resolver's check_status is a high-water ordering refusal, never equality \u2014 and lc-07 pins the yank-then-advise tree that equality refused forever. sim-v6/sim-v7 carry the two fold-added committed vectors (byte-identical rows land in the SDK twin). Each similarity row's expected label types the comparison set it exercises \u2014 'reserved' rows run against reserved_namespaces, 'lookalike'/'distinct'/'same' rows against the vetted-namespace comparison.",
+  "rows": [
+    {
+      "comparison_set": "vetted",
+      "expected": "lookalike",
+      "id": "sim-v1",
+      "input": "benchweave-labs vs benchweave (skeleton containment)",
+      "surface": "similarity-rule"
+    },
+    {
+      "comparison_set": "vetted",
+      "expected": "lookalike",
+      "id": "sim-v2",
+      "input": "benchwave vs benchweave (skeleton edit distance 1)",
+      "surface": "similarity-rule"
+    },
+    {
+      "comparison_set": "reserved",
+      "expected": "reserved",
+      "id": "sim-v3",
+      "input": "otdp-tools vs otdp (skeleton containment of a reserved name)",
+      "surface": "similarity-rule"
+    },
+    {
+      "comparison_set": "vetted",
+      "expected": "lookalike",
+      "id": "sim-v4",
+      "input": "madeinoz68 vs madeinoz67 (skeleton edit distance 1)",
+      "surface": "similarity-rule"
+    },
+    {
+      "comparison_set": "vetted",
+      "expected": "distinct",
+      "id": "sim-v5",
+      "input": "acme-power vs madeinoz67 (distinct)",
+      "surface": "similarity-rule"
+    },
+    {
+      "expected_finding": "namespace_reserved:",
+      "id": "ns-01",
+      "input": "publishers.json entry claiming namespace 'benchweave' (reserved exact)",
+      "surface": "vetting-gate"
+    },
+    {
+      "expected_finding": "namespace_reserved:",
+      "id": "ns-02",
+      "input": "publishers.json entry claiming namespace 'otdp-tools' (extends reserved)",
+      "surface": "vetting-gate"
+    },
+    {
+      "expected_finding": "namespace_lookalike:",
+      "id": "ns-03",
+      "input": "publishers.json entry 'northwind-instrumentz' near vetted 'northwind-instruments'",
+      "surface": "vetting-gate"
+    },
+    {
+      "expected_finding": "namespace_collision:",
+      "id": "ns-04",
+      "input": "two publishers.json entries claiming one namespace",
+      "surface": "vetting-gate"
+    },
+    {
+      "expected_finding": "publisher_unvetted:",
+      "id": "ns-05",
+      "input": "record whose publisher is not a vetted publishers.json entry",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "namespace_reserved:",
+      "id": "ns-06",
+      "input": "lifecycle record for reserved plugin 'sim-psu'",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "namespace_collision:",
+      "id": "ns-07",
+      "input": "publisher B's publish record claiming A's published package id",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "vetting_row_unknown:",
+      "id": "vt-01",
+      "input": "publishers.json entry citing unknown checklist row 'V-99'",
+      "surface": "vetting-gate"
+    },
+    {
+      "expected": "pass",
+      "id": "vt-02",
+      "input": "the committed fixture publishers.json (both entries, all six V-rows)",
+      "surface": "vetting-gate"
+    },
+    {
+      "expected_finding": "yank_status_absent:",
+      "id": "lc-01",
+      "input": "yank record whose release has no status document",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "yank_status_absent:",
+      "id": "lc-02",
+      "input": "yank record whose release status lifecycle is 'published'",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "status_yank_unrecorded:",
+      "id": "lc-03",
+      "input": "status document lifecycle yanked with no yank record",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "advisory_status_absent:",
+      "id": "lc-04",
+      "input": "advisory record whose advisory id is absent from the served status advisories[]",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "withdraw_after_publication:",
+      "id": "lc-05",
+      "input": "withdraw record for a submission with a publish record",
+      "surface": "records-gate"
+    },
+    {
+      "expected": "pass",
+      "id": "lc-06",
+      "input": "coherent yank: record + status yanked + cited status_sequence <= the served sequence",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "transfer_receiver_unvetted:",
+      "id": "tr-01",
+      "input": "transfer record to an unvetted publisher",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "transfer_vetting_unresolved:",
+      "id": "tr-02",
+      "input": "transfer whose vetting_reference does not resolve to the receiver's vetting citation",
+      "surface": "records-gate"
+    },
+    {
+      "expected_finding": "transfer_consents_incomplete:",
+      "id": "tr-03",
+      "input": "transfer whose consents do not name both publishers",
+      "surface": "records-gate"
+    },
+    {
+      "expected": "pass",
+      "id": "tr-04",
+      "input": "coherent transfer: both consents, receiver vetted, reference resolves",
+      "surface": "records-gate"
+    },
+    {
+      "expected": "row dropped; status document untouched",
+      "id": "ix-01",
+      "input": "release with an unlist record, status published",
+      "surface": "index-generator"
+    },
+    {
+      "expected": "row dropped (record-driven; admissibility unchanged)",
+      "id": "ix-02",
+      "input": "release with an unlist record, no status document",
+      "surface": "index-generator"
+    },
+    {
+      "expected": "row kept (status documents are the generator's only yank authority, Q8)",
+      "id": "ix-03",
+      "input": "release with a yank record but no status document",
+      "surface": "index-generator"
+    },
+    {
+      "expected": "row kept, advisories surfaced on the row",
+      "id": "ix-04",
+      "input": "release with an advisory in its status document",
+      "surface": "index-generator"
+    },
+    {
+      "id": "lc-07",
+      "surface": "records-gate",
+      "input": "yank@seq2 + advise@seq3 (advisory preserved through yank)",
+      "expected": "pass"
+    },
+    {
+      "id": "sim-v6",
+      "surface": "similarity-rule",
+      "input": "b3nchweave vs benchweave (skeleton-equal via the confusable map, 3->e)",
+      "expected": "same",
+      "comparison_set": "vetted"
+    },
+    {
+      "id": "sim-v7",
+      "surface": "similarity-rule",
+      "input": "madeinoz67-labs vs madeinoz67 (skeleton containment of a vetted namespace)",
+      "expected": "lookalike",
+      "comparison_set": "vetted"
+    }
+  ],
+  "table_version": 2
+}

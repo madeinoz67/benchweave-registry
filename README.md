@@ -21,7 +21,7 @@ Layout:
 | `lane-rules.json` | Reserved namespaces, the similarity rule with committed vectors (CR-39), the pre-committed `scoped_transport` tier rule (Q15/CR-49), the capability enumeration (CR-45), and the checklist registrations (review + vetting). |
 | `review-checklist.md` | The versioned owner checklist with machine-citable row ids (CR-8), extending the gateway's device-developer-guide §12. |
 | `vetting-checklist.md` | The versioned publisher-vetting checklist (V-01…V-06, issue #225): identity↔namespace, reserved lists, the similarity rule, Q21 protections, key recording, transfer re-vetting. `publishers.json` citations resolve here. |
-| `releases/<registry-id>/<publisher>/<plugin>/<version>/` | The served release tree (`manifest.json`, `manifest.sig`, `status.json`, `status.sig`, `payload.zip`) — layout satisfies the gateway's `LocalDirectorySource` contract, so a clone is a resolvable origin. The dogfooded release's baseline `status.json` is committed; its `status.sig` (and `keys/main.pub.pem`) land with the maintainer origin root — see "Status documents" below. |
+| `releases/<registry-id>/<publisher>/<plugin>/<version>/` | The served release tree (`manifest.json`, `manifest.sig`, `status.json`, `status.sig`, `payload.zip`) — layout satisfies the gateway's `LocalDirectorySource` contract; once the origin public root and the status signatures land, a clone is a resolvable origin (see "Status documents" for the interim state). The dogfooded release's baseline `status.json` is committed; its `status.sig` (and `keys/main.pub.pem`) land with the maintainer origin root — see "Status documents" below. |
 | `records/publishers.json` | Vetted publishers, their recorded public keys and key-validity windows, and their machine-citable vetting blocks — what publisher signatures verify against and what the validity gate resolves. |
 | `gateway-ref` | The pinned gateway commit the admission replay runs at (Q10, F5). |
 | `scripts/validate_records.py` | The records-validity gate (CI job `validity`): record schemas, the namespace/vetting arms, the lifecycle pair checks, withdraw/transfer arms (issue #225). |
@@ -36,8 +36,12 @@ cd benchweave-registry && uv run python scripts/verify.py
 ```
 
 That prints the accountability chain for every published release — publisher,
-reviewer, outcome, closure digest, capability declaration — from this clone
-alone: no gateway repository, no PR thread, no running service (S3/A3).
+reviewer, outcome, closure digest, capability declaration, lifecycle
+timeline — from this clone alone: no gateway repository, no PR thread, no
+running service (S3/A3). (The on-demand admission replay, run the same
+way with `--gateway <checkout>`, currently exits 1 with the typed
+finding `origin_root_absent` until the origin public root lands — the
+held-interim state "Status documents" names.)
 
 ## Publishing path (summary)
 

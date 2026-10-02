@@ -511,6 +511,13 @@ def _yank_tree_with(root: Path, status: dict[str, Any] | None) -> Path:
     yank_dir = root / "records" / "lifecycle" / "madeinoz67" / "dps150" / "0.1.0"
     yank_dir.mkdir(parents=True, exist_ok=True)
     (yank_dir / "2-yank.json").write_bytes(vr.canonical_bytes(_yank_record()))
+    # Fold rows 3+8: a tree with records must carry its authorities.
+    repo = Path(__file__).resolve().parents[1]
+    (root / "records" / "publishers.json").write_bytes(
+        (repo / "records" / "publishers.json").read_bytes()
+    )
+    for name in ("lane-rules.json", "vetting-checklist.md"):
+        (root / name).write_bytes((repo / name).read_bytes())
     if status is not None:
         planted = dict(status)
         planted.setdefault("sequence", 2)

@@ -131,7 +131,7 @@ def _edit_distance(left: str, right: str) -> int:
 
 
 def namespace_verdict(
-    candidate: str, existing: str, *, reserved: bool, rules: dict[str, Any] | None = None
+    candidate: str, existing: str, *, reserved: bool, rules: dict[str, Any]
 ) -> str:
     """Classify a candidate namespace against an existing name (CR-39).
 
@@ -142,10 +142,12 @@ def namespace_verdict(
     within the committed maximum, or one skeleton containing the other
     (the extension shapes the committed vectors pin). The twin-test
     discipline: this rule and the SDK's package-time rule are both pinned
-    against the five committed ``lane-rules.json`` vectors.
+    against the same committed ``lane-rules.json`` vectors.
+
+    ``rules`` is explicit (fold row 6): no caller silently falls back to
+    this repository's own lane rules — a tree is validated against its own
+    authorities or not at all.
     """
-    if rules is None:
-        rules = _lane_rules(REPO) or {}
     params = rules.get("similarity_rule", {}).get("params", {})
     left, right = _skeleton(candidate, params), _skeleton(existing, params)
     if left == right:
@@ -183,6 +185,19 @@ def _vetting_checks(
     vetted = {str(entry.get("publisher_id")) for entry in entries}
     rules = _lane_rules(root)
     namespaces = [str(entry.get("namespace")) for entry in entries]
+
+    # Fold row 8 (conditional arm - the check held: every committed and
+    # fixture entry carries the equality): a publisher's namespace IS its
+    # publisher id. Cross-field equality is not expressible in JSON Schema
+    # 2020-12, so the arm lives here rather than in publishers.schema.json.
+    for entry in entries:
+        if entry.get("namespace") != entry.get("publisher_id"):
+            findings.append(
+                f"publisher_namespace_mismatch:publishers.json: "
+                f"{entry.get('publisher_id')} claims namespace "
+                f"{entry.get('namespace')} (equality pinned: a publisher's "
+                "namespace is its publisher id)"
+            )
 
     seen: set[str] = set()
     for namespace in namespaces:
@@ -313,6 +328,30 @@ def _transfer_findings(
     return findings
 
 
+def _seq_uniqueness_findings(parsed_by_path: dict[Path, dict[str, Any]]) -> list[str]:
+    """Fold row 4: per-release record filename sequences must be unique.
+
+    Two records at one numeric sequence on one release must not merge
+    silently. Gap-free stays OPTIONAL — a documented choice: sequences name
+    order, not a contiguous clock, and git history is the floor.
+    """
+    findings: list[str] = []
+    seen: dict[Path, set[int]] = {}
+    for path in parsed_by_path:
+        match = re.fullmatch(r"(\d+)-[a-z]+\.json", path.name)
+        if match is None:
+            continue
+        sequences = seen.setdefault(path.parent, set())
+        number = int(match.group(1))
+        if number in sequences:
+            findings.append(
+                f"record_seq_duplicate:{path.parent.name}/{path.name}: sequence "
+                f"{number} is already taken on this release"
+            )
+        sequences.add(number)
+    return findings
+
+
 def record_paths(records_dir: Path) -> list[Path]:
     """Every committed record file, sorted (submissions and lifecycle)."""
     return sorted(
@@ -422,9 +461,7 @@ def validate_tree(root: Path) -> list[str]:
     # CR-35's releases half: no dev-prefixed origin or dependency lineage in
     # the published tree (the docstring's records-AND-releases claim, made
     # true here): a dev-unsigned origin under releases/ refuses.
-    import re as _re
-
-    _segment = _re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+    _segment = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
     for manifest_path in sorted(manifests.values()):
         manifest = json.loads(manifest_path.read_bytes())
         rel = manifest_path.relative_to(releases_dir).as_posix()
@@ -456,8 +493,43 @@ def validate_tree(root: Path) -> list[str]:
             if reconciled != signed:
                 findings.append(f"manifest_reconciliation_failed:{rel}")
 
+    # Fold row 3 (fail-closed authority presence): records without their
+    # authorities are §1.2's vacuity class reborn — the gate was green with
+    # unvetted and reserved records planted because nothing forced the
+    # authority files to exist. Any record at all requires both authorities.
+    if parsed_by_path:
+        for authority in ("records/publishers.json", "lane-rules.json"):
+            if not (root / authority).is_file():
+                findings.append(
+                    f"authority_absent:{authority}: the tree carries records "
+                    "without their authority files"
+                )
+
+    # Fold row 4: per-release filename sequences must be unique; gap-free
+    # stays optional (see _seq_uniqueness_findings for the documented choice).
+    findings.extend(_seq_uniqueness_findings(parsed_by_path))
+
     publish_keys: set[tuple[str, str, str]] = set()
     yank_keys: set[tuple[str, str, str]] = set()
+    # Fold row 2 (two-pass): the per-record arms compare against keys drawn
+    # from ALL records, but paths sort lexicographically — "10-withdraw.json"
+    # sorts BEFORE "2-publish.json" — so a single mid-pass evaluation saw a
+    # withdraw before the publish it conflicts with existed. Collect first,
+    # evaluate second.
+    for parsed in parsed_by_path.values():
+        if parsed.get("record_type") != "lifecycle":
+            continue
+        lifecycle = parsed.get("lifecycle", {})
+        collect_key = (
+            lifecycle.get("publisher"),
+            lifecycle.get("plugin"),
+            lifecycle.get("version"),
+        )
+        if lifecycle.get("op") == "publish":
+            publish_keys.add(collect_key)
+        elif lifecycle.get("op") in ("yank", "takedown"):
+            yank_keys.add(collect_key)
+
     for path, parsed in parsed_by_path.items():
         # CR-35's index half: no dev-prefixed registry id in any record.
         if "dev-" in json.dumps(parsed):
@@ -486,10 +558,6 @@ def validate_tree(root: Path) -> list[str]:
             lifecycle.get("version"),
         )
         op = lifecycle.get("op")
-        if op == "publish":
-            publish_keys.add(key)
-        elif op in ("yank", "takedown"):
-            yank_keys.add(key)
         if op == "yank":
             # Fold R2 (lane A F2, round-2 refute) + slice 3's §2.3 pairing:
             # a canonical yank record whose release lacks a status.json with
@@ -509,12 +577,24 @@ def validate_tree(root: Path) -> list[str]:
                     "— the catalogue serves the row unchanged (status.json is the "
                     "single authority, Q8)"
                 )
-            elif lifecycle.get("status_sequence") != status.get("sequence"):
-                findings.append(
-                    f"yank_status_sequence_mismatch:{path.name}: record cites "
-                    f"sequence {lifecycle.get('status_sequence')}, the served status "
-                    f"is at sequence {status.get('sequence')}"
-                )
+            else:
+                # Fold row 1: ORDERING, not equality. §2.3's own words are
+                # "mirroring exactly what the resolver enforces" — and the
+                # resolver's check_status is a high-water ORDERING refusal,
+                # never equality. This keeps yank-then-advise (§2.3's
+                # CVE-documentation pattern, advisories preserved through
+                # yank) representable. Residual, stated: a stale yank record
+                # (cited < served) rides a newer status revision — ordering
+                # + lifecycle still pin coherence.
+                cited = lifecycle.get("status_sequence")
+                served = status.get("sequence")
+                if cited is None or served is None or cited > served:
+                    findings.append(
+                        f"yank_status_sequence_mismatch:{path.name}: record cites "
+                        f"sequence {cited}, the served status is at sequence "
+                        f"{served} — the record must not claim a status revision "
+                        "newer than the served document"
+                    )
             continue
         if op == "advisory":
             # §2.3: the advisory the record appends must be IN the served
