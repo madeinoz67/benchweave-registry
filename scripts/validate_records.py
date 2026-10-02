@@ -20,8 +20,9 @@ separators, one trailing newline), schema-valid against
 - the yank pairing is bidirectional and sequence-pinned (§2.3): a served
   status saying yanked-or-revoked with no governing yank/takedown record
   refuses (``status_yank_unrecorded:``), and the record's
-  ``status_sequence`` must equal the sequence actually served
-  (``yank_status_sequence_mismatch:``);
+  ``status_sequence`` must not exceed the sequence actually served —
+  ordering, mirroring the resolver's high-water check; a stale record
+  rides a newer status revision (``yank_status_sequence_mismatch:``);
 - an advisory record whose advisory id is absent from the served status's
   ``advisories[]`` refuses (``advisory_status_absent:``);
 - a withdraw record for an already-published submission refuses
