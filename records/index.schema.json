@@ -42,7 +42,6 @@
           "kind",
           "publisher",
           "manifest_sha256",
-          "signed",
           "display_name",
           "summary",
           "licence_spdx",
@@ -55,7 +54,9 @@
           "source_revision",
           "unverified_markers",
           "gateway_ref",
-          "firmware_attestation"
+          "firmware_attestation",
+          "signature_state",
+          "timestamp"
         ],
         "additionalProperties": false,
         "properties": {
@@ -86,10 +87,6 @@
           "manifest_sha256": {
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"
-          },
-          "signed": {
-            "type": "boolean",
-            "description": "Signature presence (manifest.sig + status.sig verified at generation)."
           },
           "display_name": {
             "type": "string",
@@ -270,6 +267,48 @@
               }
             ],
             "description": "The recorded vendor attestation, advertised (null when none). Enforcement is the client decision."
+          },
+          "signature_state": {
+            "enum": [
+              "signed-valid",
+              "unsigned"
+            ],
+            "description": "The recorded publisher-signature state; replaces the earlier boolean \"signed\" (one source of truth)."
+          },
+          "timestamp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "tsa",
+                  "signed_at",
+                  "signature_sha256",
+                  "token_sha256"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "tsa": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "signed_at": {
+                    "type": "string",
+                    "minLength": 13
+                  },
+                  "signature_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "token_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                }
+              }
+            ]
           }
         }
       }

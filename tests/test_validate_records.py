@@ -84,6 +84,7 @@ def publish_record() -> dict[str, Any]:
             "release_manifest_sha256": "d" * 64,
             "closure": {"prior": None, "added": [], "changed": [], "removed": []},
             "closure_digest": "c" * 64,
+            "signature_state": "signed-valid",
         },
     }
 
@@ -301,6 +302,7 @@ def test_dev_lineage_dependency_in_release_is_refused(tmp_path: Path) -> None:
 def test_publish_record_advertises_gateway_ref() -> None:
     record = publish_record()
     record["lifecycle"]["gateway_ref"] = "45d5e7fdc45dc6bbf765b1c8e85af70a2d830d94"
+    record["lifecycle"]["signature_state"] = "signed-valid"
     assert findings_for(record) == []
 
 
@@ -308,6 +310,7 @@ def test_unpinned_publish_record_still_validates() -> None:
     """No publish-time enforcement: a release targeting no pin records fine."""
     record = publish_record()
     assert "gateway_ref" not in record["lifecycle"]
+    record["lifecycle"]["signature_state"] = "unsigned"
     assert findings_for(record) == []
 
 

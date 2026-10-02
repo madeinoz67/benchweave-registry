@@ -71,9 +71,12 @@ not guess or fork a styleguide here.
   (validator-enforced); the drain moves them into the `benchweave` vault on
   PreCompact / SessionEnd / Stop. See `.claude/memory-protocol.md` for the
   bar and the do-not-propose list.
-- **Keys and secrets.** The lane's signing key is maintainer-custodied and
-  NEVER enters this repository or any CI (CR-12). `keys/` carries public
-  halves only. Secret scanning with push protection is on; a PEM-shaped
+- **Keys and secrets.** The registry VALIDATES + PUBLISHES + LABELS, never
+  signs (owner ruling 2026-10-02): there is no registry signing key. Publishers
+  sign at package time; `records/publishers.json` records their PUBLIC keys
+  and validity windows — what signatures verify against. A present signature
+  that does not verify is rejected; an unsigned release publishes labeled
+  `unsigned`. Secret scanning with push protection is on; a PEM-shaped
   fixture push is refused.
 - **Records discipline.** Records are canonical JSON, schema-validated, and
   append-only in spirit: nothing rewrites a published release or its history

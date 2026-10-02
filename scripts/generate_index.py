@@ -67,8 +67,8 @@ def _reviews(root: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     return reviews
 
 
-def _maintenance(status: dict[str, Any]) -> str:
-    state = status.get("support_state")
+def _maintenance(publish: dict[str, Any]) -> str:
+    state = publish.get("support_state")
     if state in ("maintained", "maintenance_only", "unmaintained"):
         return str(state)
     return "unknown"
@@ -88,12 +88,7 @@ def generate(root: Path) -> bytes:
             _registry_id, publisher, plugin, version, _name = parts
             manifest = json.loads(manifest_path.read_bytes())
             release_dir = manifest_path.parent
-            signed = (release_dir / "manifest.sig").is_file() and (
-                release_dir / "status.sig"
-            ).is_file()
             status: dict[str, Any] = {}
-            if (release_dir / "status.json").is_file():
-                status = json.loads((release_dir / "status.json").read_bytes())
             review_record = reviews.get((publisher, plugin, version), {})
             review = review_record.get("review", {})
             publish = publishes.get((publisher, plugin, version), {})
@@ -112,7 +107,11 @@ def generate(root: Path) -> bytes:
                     "kind": review_record.get("kind", "admitted-release"),
                     "publisher": manifest.get("publisher_id", publisher),
                     "manifest_sha256": sha256_hex(manifest_path.read_bytes()),
-                    "signed": signed,
+                    "signature_state": publish.get(
+                        "signature_state",
+                        "signed-valid" if (release_dir / "manifest.sig").is_file() else "unsigned",
+                    ),
+                    "timestamp": publish.get("timestamp"),
                     "display_name": manifest.get("display_name", plugin),
                     "summary": manifest.get("summary", ""),
                     "licence_spdx": manifest.get("licence", {}).get("spdx_expression", "unknown"),
@@ -128,7 +127,7 @@ def generate(root: Path) -> bytes:
                         }
                         for entry in manifest.get("evidence", [])
                     ],
-                    "maintenance": _maintenance(status),
+                    "maintenance": _maintenance(publish),
                     "advisories": sorted(
                         advisory.get("id", "")
                         for advisory in status.get("advisories", [])

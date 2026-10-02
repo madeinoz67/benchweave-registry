@@ -363,6 +363,42 @@
             }
           },
           "description": "CR-50, stated-not-enforced (owner ruling, issue #223 rework): the vendor attestation recorded for a firmware-carrying release; enforcement is the client decision. Bytes are vendor-distributed, never bundled."
+        },
+        "signature_state": {
+          "enum": [
+            "signed-valid",
+            "unsigned"
+          ],
+          "description": "The publisher-signature state this release was recorded with (owner ruling 2026-10-02): the registry validates + publishes + labels, never signs. A present signature that does not verify never reaches a record - validation rejects it before recording."
+        },
+        "timestamp": {
+          "type": "object",
+          "required": [
+            "tsa",
+            "signed_at",
+            "signature_sha256",
+            "token_sha256"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "tsa": {
+              "type": "string",
+              "minLength": 1
+            },
+            "signed_at": {
+              "type": "string",
+              "minLength": 13
+            },
+            "signature_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "token_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "description": "The RFC 3161 trusted timestamp verified at recording: with one, the signature stays valid past key expiry/revocation (validity judged at the TSA-attested time)."
         }
       }
     }
@@ -443,7 +479,8 @@
             "required": [
               "release_manifest_sha256",
               "closure",
-              "closure_digest"
+              "closure_digest",
+              "signature_state"
             ]
           }
         }

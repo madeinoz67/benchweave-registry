@@ -19,7 +19,7 @@ Layout:
 | `lane-rules.json` | Reserved namespaces, the similarity rule with committed vectors (CR-39), the pre-committed `scoped_transport` tier rule (Q15/CR-49), the capability enumeration (CR-45). |
 | `review-checklist.md` | The versioned owner checklist with machine-citable row ids (CR-8), extending the gateway's device-developer-guide §12. |
 | `releases/<registry-id>/<publisher>/<plugin>/<version>/` | The served release tree (`manifest.json`, `manifest.sig`, `status.json`, `status.sig`, `payload.zip`) — layout satisfies the gateway's `LocalDirectorySource` contract, so a clone is a resolvable origin. |
-| `keys/main.pub.pem` | The public trust root. The private half is maintainer-custodied and never enters this repository or any CI (CR-12). |
+| `records/publishers.json` | Vetted publishers, their recorded public keys and key-validity windows — what publisher signatures verify against. |
 | `gateway-ref` | The pinned gateway commit the admission replay runs at (Q10, F5). |
 | `scripts/validate_records.py` | The records-validity gate (CI job `validity`). |
 | `scripts/replay_admission.py` | On-demand admission replay through unmodified gateway admission (not a publish-time gate; the client enforces). |

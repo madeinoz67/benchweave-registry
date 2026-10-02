@@ -4,7 +4,10 @@
   "title": "BenchWeave registry vetted publishers",
   "description": "Vetted publisher identities and their namespace assignments (CR-15/CR-39). A publisher identity is a GitHub identity plus a publisher name (NFR-7); nothing more is collected.",
   "type": "object",
-  "required": ["publishers_version", "publishers"],
+  "required": [
+    "publishers_version",
+    "publishers"
+  ],
   "additionalProperties": false,
   "properties": {
     "publishers_version": {
@@ -15,7 +18,13 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["publisher_id", "namespace", "github", "vetted_at", "publisher_repo_protections"],
+        "required": [
+          "publisher_id",
+          "namespace",
+          "github",
+          "vetted_at",
+          "publisher_repo_protections"
+        ],
         "additionalProperties": false,
         "properties": {
           "publisher_id": {
@@ -40,11 +49,18 @@
             "minItems": 1,
             "items": {
               "type": "object",
-              "required": ["protection", "state"],
+              "required": [
+                "protection",
+                "state"
+              ],
               "additionalProperties": false,
               "properties": {
                 "protection": {
-                  "enum": ["push-protection", "code-scanning", "advisories"]
+                  "enum": [
+                    "push-protection",
+                    "code-scanning",
+                    "advisories"
+                  ]
                 },
                 "state": {
                   "const": "declared-not-verified",
@@ -52,6 +68,30 @@
                 }
               }
             }
+          },
+          "ed25519_public_key_pem": {
+            "type": "string",
+            "pattern": "^-----BEGIN PUBLIC KEY-----",
+            "description": "The publisher's recorded Ed25519 public key (PEM): what the registry verifies publisher signatures against. The registry never holds a private key."
+          },
+          "key_validity": {
+            "type": "object",
+            "required": [
+              "not_before",
+              "not_after"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "not_before": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "not_after": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "description": "The signing key's validity window; with a trusted timestamp, validity is judged at the TSA-attested signing time."
           }
         }
       }
