@@ -23,7 +23,7 @@ PAGE_CSS = REPO / "catalogue" / "assets" / "catalogue.css"
 
 #: The vendored bytes' origin (the slice-2 branch tip that carries the two
 #: declared component shapes; main's copy predates them).
-ORIGIN = "madeinoz67/benchweave@c90f9f3:docs/internal/public-site-styleguide.html"
+ORIGIN = "madeinoz67/benchweave@635e5b9:docs/internal/public-site-styleguide.html"
 
 _VAR_REF = re.compile(r"var\(\s*(--[a-z0-9-]+)")
 _TOKEN_DECL = re.compile(r"^\s{2,}(--[a-z0-9-]+)\s*:\s*([^;]+);", re.MULTILINE)

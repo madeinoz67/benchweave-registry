@@ -1,7 +1,7 @@
 {
-  "comment": "Digest pin for the vendored public-site styleguide (the gateway repo remains the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). Origin note: pinned to the slice-2 branch tip c90f9f3 because its amendments declare the two catalogue component shapes (filter bar, catalogue meta line) that this catalogue consumes. Fold R8 correction (2026-10-02, critic F4): when the gateway branch merges, main's bytes will NOT be identical to these — gateway main has since reworded the component notes (measured: main's styleguide sha256 is 565cc7f2668d…, the pinned bytes are bc0cf7e28cd5…) — so the merge act must re-COPY the new main bytes, recompute sha256 and update source together in one deliberate commit. A re-CITATION of this pin to a main commit (source-only, claiming the same digest) is the fragile form and refuses the pin test's expectation. That re-copy is a gateway-merge step, owned here by this note.",
-  "source": "madeinoz67/benchweave@c90f9f3:docs/internal/public-site-styleguide.html",
-  "sha256": "bc0cf7e28cd58e31de814f062bc36e68cb34d09bbf2b203d8d6cfe188b8e9cb1",
+  "comment": "Digest pin for the vendored public-site styleguide (the gateway repo remains the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). Re-copy repin executed 2026-10-02 per the fold-R8 note: the #345 gateway merge reworded the component notes, so this repin re-COPIED gateway main's bytes (635e5b9), recomputed sha256 and updated source together in this one commit \u2014 the re-copy form, not a re-citation.",
+  "source": "madeinoz67/benchweave@635e5b9:docs/internal/public-site-styleguide.html",
+  "sha256": "b49bdc2ef9db997f70bfa3c35ec7f9ed4b71ca4b3ef0e36cc4880512adc34486",
   "vendored_path": "vendored/gateway/public-site-styleguide.html",
   "pinned_date": "2026-10-02"
 }
