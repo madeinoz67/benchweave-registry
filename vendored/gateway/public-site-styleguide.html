@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BenchWeave — Public Site Style Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EEF1F0;
+    --bg-elevated: #FFFFFF;
+    --bg-inset: #E3E7E5;
+    --text: #1B2027;
+    --text-muted: #565F68;
+    --border: #D6DBD9;
+    --border-strong: #B7BEBB;
+    --amber: #C6790A;      /* text/icon-safe shade of Trace Amber on light bg */
+    --amber-solid: #FFB020; /* raw brand amber for fills */
+    --amber-on: #1B2027;
+    --blue: #3355E0;
+    --blue-solid: #4C6FFF;
+    --green: #1F8F5F;
+    --green-solid: #3FB27F;
+    --red: #C82F35;
+    --red-solid: #E5484D;
+    --grid-line: rgba(27,32,39,0.06);
+    --shadow: 0 1px 2px rgba(27,32,39,0.08);
+    --radius-sm: 3px;
+    --radius-md: 6px;
+    --font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1B2027;
+      --bg-elevated: #232A33;
+      --bg-inset: #161B21;
+      --text: #ECEFEE;
+      --text-muted: #A7B0B8;
+      --border: #333C46;
+      --border-strong: #46505C;
+      --amber: #FFB020;
+      --amber-on: #1B2027;
+      --blue: #8AA0FF;
+      --green: #3FD394;
+      --red: #FF6B70;
+      --grid-line: rgba(236,239,238,0.06);
+      --shadow: 0 1px 2px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1B2027;
+    --bg-elevated: #232A33;
+    --bg-inset: #161B21;
+    --text: #ECEFEE;
+    --text-muted: #A7B0B8;
+    --border: #333C46;
+    --border-strong: #46505C;
+    --amber: #FFB020;
+    --amber-on: #1B2027;
+    --blue: #8AA0FF;
+    --green: #3FD394;
+    --red: #FF6B70;
+    --grid-line: rgba(236,239,238,0.06);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--blue); }
+  code, .mono { font-family: var(--font-mono); }
+
+  header.top {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 600; font-size: 18px; }
+  .wordmark svg { display: block; }
+  nav.toc { display: flex; gap: 20px; font-size: 14px; }
+  nav.toc a { color: var(--text-muted); text-decoration: none; }
+  nav.toc a:hover { color: var(--text); }
+  button.theme-toggle {
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--bg-inset); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 6px 10px; cursor: pointer;
+  }
+
+  main { max-width: 980px; margin: 0 auto; padding: 48px 28px 96px; }
+  section { margin-bottom: 72px; scroll-margin-top: 70px; }
+  section > h2 {
+    font-family: var(--font-display); font-size: 26px; font-weight: 600;
+    margin: 0 0 6px;
+  }
+  .section-desc { color: var(--text-muted); max-width: 62ch; margin: 0 0 28px; }
+  h3 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin: 32px 0 14px; }
+  p.note { color: var(--text-muted); font-size: 14px; }
+
+  .intro-head { padding: 56px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+  .intro-head .eyebrow { font-family: var(--font-mono); font-size: 13px; color: var(--amber); margin: 0 0 12px; }
+  .intro-head h1 { font-family: var(--font-display); font-size: 38px; font-weight: 700; margin: 0 0 16px; letter-spacing: -0.01em; }
+  .intro-head p { max-width: 60ch; color: var(--text-muted); font-size: 16px; }
+
+  /* Color swatches */
+  .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .swatch { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--bg-elevated); }
+  .swatch-fill { height: 72px; }
+  .swatch-body { padding: 12px 14px; }
+  .swatch-name { font-weight: 600; font-size: 14px; }
+  .swatch-hex { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .swatch-use { font-size: 12.5px; color: var(--text-muted); margin-top: 6px; }
+
+  /* Type scale */
+  .type-row { display: flex; align-items: baseline; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .type-row:last-child { border-bottom: none; }
+  .type-meta { width: 220px; flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  .type-sample.display { font-family: var(--font-display); font-weight: 700; }
+  .type-sample.body { font-family: var(--font-body); }
+  .type-sample.mono { font-family: var(--font-mono); }
+
+  /* Spacing scale */
+  .space-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; }
+  .space-bar { background: var(--amber-solid); height: 10px; border-radius: 2px; }
+  .space-label { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); width: 120px; }
+
+  /* Buttons */
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .btn { font-family: var(--font-body); font-weight: 600; font-size: 14px; padding: 10px 18px; border-radius: var(--radius-sm); border: 1px solid transparent; cursor: pointer; }
+  .btn-primary { background: var(--amber-solid); color: var(--amber-on); }
+  .btn-secondary { background: transparent; border-color: var(--border-strong); color: var(--text); }
+  .btn-ghost { background: transparent; color: var(--blue); padding-left: 4px; padding-right: 4px; }
+
+  /* Badges / status pills */
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border-strong); }
+  .badge-version { background: var(--bg-inset); color: var(--text); }
+  .badge-info { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, transparent); }
+  .badge-warning { background: color-mix(in srgb, var(--amber-solid) 18%, transparent); color: var(--amber); border-color: color-mix(in srgb, var(--amber-solid) 45%, transparent); }
+  .badge-success { background: color-mix(in srgb, var(--green-solid) 16%, transparent); color: var(--green); border-color: color-mix(in srgb, var(--green-solid) 42%, transparent); }
+  .badge-danger { background: color-mix(in srgb, var(--red-solid) 16%, transparent); color: var(--red); border-color: color-mix(in srgb, var(--red-solid) 42%, transparent); }
+
+  /* Code block */
+  .code-block { background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 18px; font-family: var(--font-mono); font-size: 13px; overflow-x: auto; }
+  .code-block .muted { color: var(--text-muted); }
+
+  /* Spec card */
+  .spec-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px; background: var(--bg-elevated); }
+  .spec-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+  .spec-card h4 { font-family: var(--font-display); font-size: 16px; margin: 0; }
+  .spec-card p { font-size: 13.5px; color: var(--text-muted); margin: 0; }
+
+  /* Filter bar (issue #224 — catalogue controls) */
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+  .filter-bar label { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+  .filter-bar input[type="text"], .filter-bar select { font-family: var(--font-body); font-size: 13.5px; color: var(--text); background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 9px; }
+  .filter-bar input[type="checkbox"] { accent-color: var(--blue); }
+
+  /* Catalogue meta line (issue #224) */
+  .catalogue-meta { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
+
+  /* Table */
+  table.gd-map { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.gd-map th, table.gd-map td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.gd-map th { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  table.gd-map td code { background: var(--bg-inset); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } .type-row { flex-direction: column; gap: 6px; } .type-meta { width: auto; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wordmark">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="var(--amber-solid)" stroke-width="1.6"/>
+      <path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="var(--amber-solid)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M17 7 L7 17" stroke="var(--blue-solid)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    BenchWeave — Style Guide
+  </div>
+  <nav class="toc">
+    <a href="#ai-instructions">For AI</a>
+    <a href="#overview">Overview</a>
+    <a href="#color">Color</a>
+    <a href="#type">Type</a>
+    <a href="#logo">Logo</a>
+    <a href="#components">Components</a>
+    <a href="#ambient">Background</a>
+    <a href="#greatdocs">Great Docs</a>
+    <a href="#voice">Voice</a>
+  </nav>
+  <button class="theme-toggle" onclick="toggleTheme()">☾/☀ theme</button>
+</header>
+
+<main>
+  <div class="intro-head" id="overview">
+    <p class="eyebrow mono">Public site · v0.2 draft</p>
+    <h1>BenchWeave design system</h1>
+    <p>Tokens and components for benchweave.dev — the landing site, versioned standards pages, user guides, and the SDK pointer. Independent from the internal application UI style guide by design: the app is an instrument operator's console; this is the front door for engineers evaluating and building on BenchWeave. Same product, deliberately different register.</p>
+  </div>
+
+  <section id="ai-instructions">
+    <h2>Instructions for AI</h2>
+    <p class="section-desc">Read this first if you're an agent implementing benchweave.dev from this guide — then read the full document below too. This is the hard-rules summary, not a substitute for it. Human contributors can skip straight to <a href="#principles">Principles</a>.</p>
+
+    <h3>Non-negotiable</h3>
+    <ul style="color:var(--text-muted); padding-left:20px; font-size:14.5px;">
+      <li>Copy the CSS custom properties from this file's <code class="mono">:root</code> block verbatim. Don't re-derive hex values from memory, from a swatch's rendered color, or from this prose — the <code class="mono">:root</code> declarations are the only source of truth for values.</li>
+      <li>Copy the logo SVG paths below verbatim. Don't regenerate, "improve," or approximate the mark — a slightly different hexagon or weave crossing on the next run is a broken brand, not a refinement.</li>
+      <li>Fonts are exactly Space Grotesk (display), IBM Plex Sans (body), IBM Plex Mono (code, data, versions). No substitutions, no adding a fourth family, no swapping weights not shown in the type scale.</li>
+      <li>Trace Amber and Signal Blue are the only accents. Verified Green and Alert Red are semantic-only — success/danger states, never decorative.</li>
+      <li>Solid hex = gateway. Dashed hex = SDK. Stack-glyph hex = registry, tag-glyph hex = standards — both not built yet, don't ship either until told that property is real.</li>
+    </ul>
+
+    <h3>Logo — copy exactly</h3>
+    <div class="code-block">&lt;svg viewBox="0 0 24 24" fill="none"&gt;
+  &lt;path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="#FFB020" stroke-width="1.6"/&gt;
+  &lt;path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="#FFB020" stroke-width="2" stroke-linecap="round"/&gt;
+  &lt;path d="M17 7 L7 17" stroke="#4C6FFF" stroke-width="2" stroke-linecap="round"/&gt;
+&lt;/svg&gt;</div>
+    <p class="note">Dark-mode blue strand is <code class="mono">#8AA0FF</code>, not <code class="mono">#4C6FFF</code> — swap that one stroke per theme, everything else in the mark is fixed across both.</p>
+
+    <h3>Before adding anything this guide doesn't cover</h3>
+    <ul style="color:var(--text-muted); padding-left:20px; font-size:14.5px;">
+      <li>No new colors, fonts, icon sets, border-radius values, or shadow styles without asking first — this system stays deliberately small.</li>
+      <li>No second decorative background motif for hero sections beyond the scope-panel/trace pattern in "Ambient instrument background."</li>
+      <li>No numbered steps in UI copy unless the content is a genuine sequence (the SDK's five steps qualify; a feature list doesn't).</li>
+      <li>If a page needs something this guide doesn't cover, say so rather than improvising a plausible-looking addition and shipping it silently.</li>
+    </ul>
+  </section>
+
+  <section id="principles">
+    <h2>Principles</h2>
+    <p class="section-desc">Four rules everything below should answer to.</p>
+    <div class="grid-2">
+      <div class="spec-card"><h4>Precise over persuasive</h4><p>This is infrastructure for people who build test procedures for a living. State what BenchWeave does and where it stands. No hype, no unearned superlatives.</p></div>
+      <div class="spec-card"><h4>One bespoke element per page</h4><p>Spend the design's boldness on the thing that's actually specific to BenchWeave — the connection diagram, a real spec table. Everything around it stays quiet.</p></div>
+      <div class="spec-card"><h4>Dark-first, light at parity</h4><p>The audience works in terminals and scope screens. Dark is the default register; light mode gets the same contrast and hierarchy, not an afterthought.</p></div>
+      <div class="spec-card"><h4>Every label is real</h4><p>Contract names, version numbers, and status words come from the actual repo. If it's not true yet, it says "planned," not marketing copy.</p></div>
+    </div>
+  </section>
+
+  <section id="color">
+    <h2>Color</h2>
+    <p class="section-desc">Six named colors. Amber and blue are the only two accents — amber carries brand and primary action, blue is reserved for links and interactive structure so the two never compete.</p>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-fill" style="background:#1B2027"></div><div class="swatch-body"><div class="swatch-name">Bench Graphite</div><div class="swatch-hex">#1B2027</div><div class="swatch-use">Dark-mode background. Warmer than near-black — reads as instrument-chassis, not "AI dark mode."</div></div></div>
+      <div class="swatch"><div class="swatch-fill" style="background:#EEF1F0"></div><div class="swatch-body"><div class="swatch-name">Panel White</div><div class="swatch-hex">#EEF1F0</div><div class="swatch-use">Light-mode background. Cool, blueprint-paper tint — not warm cream.</div></div></div>
+      <div class="swatch"><div class="swatch-fill" style="background:#FFB020"></div><div class="swatch-body"><div class="swatch-name">Trace Amber</div><div class="swatch-hex">#FFB020</div><div class="swatch-use">Brand + primary action. Use #C6790A for amber text on light backgrounds (contrast).</div></div></div>
+      <div class="swatch"><div class="swatch-fill" style="background:#4C6FFF"></div><div class="swatch-body"><div class="swatch-name">Signal Blue</div><div class="swatch-hex">#4C6FFF</div><div class="swatch-use">Links and interactive structure only. Use #3355E0 on light, #8AA0FF on dark.</div></div></div>
+      <div class="swatch"><div class="swatch-fill" style="background:#3FB27F"></div><div class="swatch-body"><div class="swatch-name">Verified Green</div><div class="swatch-hex">#3FB27F</div><div class="swatch-use">Success / verified-safe status only. Ties to "verified safe endings" in the architecture.</div></div></div>
+      <div class="swatch"><div class="swatch-fill" style="background:#E5484D"></div><div class="swatch-body"><div class="swatch-name">Alert Red</div><div class="swatch-hex">#E5484D</div><div class="swatch-use">Errors and unsafe states only. Never decorative.</div></div></div>
+    </div>
+    <p class="note" style="margin-top:16px;">Warning reuses Trace Amber (matches Great Docs' banner semantics — see mapping below). No separate warning hue.</p>
+  </section>
+
+  <section id="type">
+    <h2>Typography</h2>
+    <p class="section-desc">Three families, three jobs. Space Grotesk's mechanical geometry carries headlines; IBM Plex Sans (built for technical documentation) carries body copy; IBM Plex Mono carries anything that's a value — versions, code, status.</p>
+    <div>
+      <div class="type-row"><div class="type-meta">Display<br>Space Grotesk 700<br>38–44px</div><div class="type-sample display" style="font-size:38px;">A gateway that weaves your bench together</div></div>
+      <div class="type-row"><div class="type-meta">H2<br>Space Grotesk 600<br>26px</div><div class="type-sample display" style="font-size:26px;">Versioned contracts</div></div>
+      <div class="type-row"><div class="type-meta">H3<br>Space Grotesk 600<br>17px</div><div class="type-sample display" style="font-size:17px;">Device developer guide</div></div>
+      <div class="type-row"><div class="type-meta">Body<br>IBM Plex Sans 400<br>16px / 1.6</div><div class="type-sample body" style="font-size:16px; max-width:52ch;">Coordinate bounded test procedures with explicit ownership, measurement evidence, and verified safe endings.</div></div>
+      <div class="type-row"><div class="type-meta">Small / muted<br>IBM Plex Sans 400<br>13.5px</div><div class="type-sample body" style="font-size:13.5px; color:var(--text-muted);">Status: architecture baseline and Python scaffold.</div></div>
+      <div class="type-row"><div class="type-meta">Mono / data<br>IBM Plex Mono 500<br>13px</div><div class="type-sample mono" style="font-size:13px;">otdp · v0.1.0 · stable</div></div>
+    </div>
+    <p class="note" style="margin-top:20px;">Line length caps at ~62ch for body paragraphs. No all-caps labels anywhere in this system — sentence case throughout, including badges.</p>
+  </section>
+
+  <section id="spacing">
+    <h2>Spacing scale</h2>
+    <p class="section-desc">4px base unit. Named, not arbitrary — reuse these, don't invent one-off values.</p>
+    <div class="space-row"><div class="space-label">xs — 4px</div><div class="space-bar" style="width:4px;"></div></div>
+    <div class="space-row"><div class="space-label">sm — 8px</div><div class="space-bar" style="width:8px;"></div></div>
+    <div class="space-row"><div class="space-label">md — 16px</div><div class="space-bar" style="width:16px;"></div></div>
+    <div class="space-row"><div class="space-label">lg — 24px</div><div class="space-bar" style="width:24px;"></div></div>
+    <div class="space-row"><div class="space-label">xl — 40px</div><div class="space-bar" style="width:40px;"></div></div>
+    <div class="space-row"><div class="space-label">2xl — 64px</div><div class="space-bar" style="width:64px;"></div></div>
+    <div class="space-row"><div class="space-label">3xl — 96px</div><div class="space-bar" style="width:96px;"></div></div>
+  </section>
+
+  <section id="components">
+    <h2>Components</h2>
+
+    <h3>Buttons</h3>
+    <div class="row">
+      <button class="btn btn-primary">Read the architecture</button>
+      <button class="btn btn-secondary">Install the SDK</button>
+      <button class="btn btn-ghost">View on GitHub →</button>
+    </div>
+    <p class="note" style="margin-top:10px;">One primary button per view. CTA text is the action itself — "Read the architecture," never "Learn more."</p>
+
+    <h3>Status &amp; version badges</h3>
+    <div class="row">
+      <span class="badge badge-version">v0.1.0</span>
+      <span class="badge badge-info">info</span>
+      <span class="badge badge-warning">draft</span>
+      <span class="badge badge-success">stable</span>
+      <span class="badge badge-danger">breaking</span>
+    </div>
+    <p class="note" style="margin-top:10px;">The four semantic types match Great Docs' announcement-banner types exactly (info / warning / success / danger), so a badge on the marketing site and a banner on the docs site read as the same language.</p>
+
+    <h3>Spec card</h3>
+    <div class="spec-card" style="max-width:420px;">
+      <div class="spec-card-head">
+        <h4>OTDP</h4>
+        <span class="badge badge-version">v0.1.0</span>
+      </div>
+      <p>Open test-device protocol contract — how the gateway talks to instrument and DUT plugins.</p>
+    </div>
+
+    <h3>Code block</h3>
+    <div class="code-block"><span class="muted"># install</span><br>pip install benchweave-sdk</div>
+
+    <h3>Filter bar <span class="badge badge-version">v0.2</span></h3>
+    <div class="filter-bar" role="search" aria-label="Filter plugins" style="max-width:560px;">
+      <label>Search <input type="text" placeholder="name, id or summary"></label>
+      <label>Publisher <select><option>any</option></select></label>
+      <label>Kind <select><option>admitted-release</option></select></label>
+      <label><input type="checkbox"> Network egress</label>
+    </div>
+    <p class="note" style="margin-top:10px;">The catalogue's controls (issue #224, promoted from the plugins panel). Text input + selects + checkboxes built from <code>--bg-inset</code>, <code>--border</code>, <code>--radius-sm</code>, IBM Plex Sans and the mono label run; the accessibility floor's 2px Signal Blue <code>:focus-visible</code> ring applies as to every control. Sentence-case labels. One bar per view.</p>
+
+    <h3>Catalogue meta line <span class="badge badge-version">v0.2</span></h3>
+    <div class="spec-card" style="max-width:420px;">
+      <div class="spec-card-head">
+        <h4>Northwind PSU driver</h4>
+        <span class="badge badge-version">v0.1.0</span>
+      </div>
+      <p>Bench power supply driver with scalar reads and a snapshot profile.</p>
+      <p class="catalogue-meta">northwind-instruments · MIT · <span class="badge badge-success">maintained</span></p>
+    </div>
+    <p class="note" style="margin-top:10px;">The per-card identity run (issue #224, promoted from the plugins panel): publisher · licence · maintenance in mono 13px. Values are always machine-rendered from the served index — never hand-typed — and absent values render as an explicit "none", never as a guess.</p>
+  </section>
+
+  <section id="ambient">
+    <h2>Ambient instrument background</h2>
+    <p class="section-desc">Hero-only texture: real oscilloscope front panels and standalone glowing traces, tilted in genuine 3D (not flat rotation) and rendered with a soft phosphor glow. Live, faint, and never the thing your eye lands on first — the hero diagram stays that.</p>
+
+    <div class="grid-2">
+      <div class="swatch" style="padding:0; background:#1B2027; overflow:hidden;">
+        <div style="position:relative; height:170px; perspective:900px;">
+          <div style="position:absolute; top:22px; left:26px; width:200px; height:130px; border:1.5px solid #8A94A0; border-radius:8px; background:#232A33; padding:10px; box-sizing:border-box; opacity:0.55; transform:rotateY(-27deg) rotateX(7deg) rotate(-3deg);">
+            <div style="width:100%; height:62%; border:1px solid #8A94A0; border-radius:3px; background:#161B21; overflow:hidden;">
+              <svg viewBox="0 0 200 60" preserveAspectRatio="none" style="width:100%; height:100%; display:block;">
+                <path d="M0 32 C16 8 32 8 48 32 C64 56 80 56 96 32 C112 8 128 8 144 32 C160 56 176 56 192 32 L200 32" fill="none" stroke="#FFB020" stroke-width="2" style="filter: drop-shadow(0 0 4px #FFB020) drop-shadow(0 0 10px #FFB020);"/>
+              </svg>
+            </div>
+            <div style="display:flex; gap:7px; margin-top:7px;">
+              <span style="width:10px; height:10px; border-radius:50%; border:1.3px solid #8A94A0; display:block;"></span>
+              <span style="width:10px; height:10px; border-radius:50%; border:1.3px solid #8A94A0; display:block;"></span>
+              <span style="width:10px; height:10px; border-radius:50%; border:1.3px solid #8A94A0; display:block;"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="swatch" style="padding:0; background:#1B2027; overflow:hidden;">
+        <div style="position:relative; height:170px; perspective:900px; display:flex; align-items:center; justify-content:center;">
+          <div style="width:260px; height:80px; opacity:0.6; transform:rotateX(22deg) rotate(-8deg);">
+            <svg viewBox="0 0 260 80" preserveAspectRatio="none" style="width:100%; height:100%; display:block;">
+              <path d="M0 40 Q30 5 60 40 T120 40 T180 40 T240 40" fill="none" stroke="#8AA0FF" stroke-width="2" style="filter: drop-shadow(0 0 4px #8AA0FF) drop-shadow(0 0 10px #8AA0FF);"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:14px;">Shown here at higher opacity so the treatment reads clearly. In production it sits at 0.18–0.22 — texture, not content.</p>
+
+    <h3>Recipe</h3>
+    <div class="code-block">/* tilt: perspective on the parent, rotateY/rotateX/rotate on the element */
+.hero-bg-scopes { position: absolute; inset: 0; z-index: -1;
+  pointer-events: none; overflow: hidden; perspective: 900px; }
+.scope-panel { transform: rotateY(-27deg) rotateX(7deg) rotate(-3deg); opacity: 0.22; }
+
+/* glow: layered drop-shadow, not a blur filter on a rect */
+.scope-trace { stroke: var(--amber); stroke-width: 2;
+  filter: drop-shadow(0 0 4px var(--amber)) drop-shadow(0 0 10px var(--amber)); }</div>
+    <p class="note">Gotcha worth keeping: <code class="mono">z-index: -1</code> only tucks an element behind its siblings if the parent itself establishes a stacking context. <code class="mono">position: relative</code> alone does not — it needs an explicit <code class="mono">z-index</code> (e.g. <code class="mono">0</code>) on that parent too, or the layer renders behind the page background and disappears entirely.</p>
+
+    <h3>Usage</h3>
+    <ul style="color:var(--text-muted); padding-left:20px; font-size:14.5px;">
+      <li>Hero sections only — never behind body copy or docs content, where it would fight legibility.</li>
+      <li>2–4 elements per hero, spread on a diagonal with real gaps between them. Corner-clustering reads as clutter, not atmosphere.</li>
+      <li>Alternate amber and blue glow so no two neighboring elements share a color.</li>
+      <li>Keep opacity in the 0.15–0.24 band. Below that it's invisible (see the gotcha above); above it, it competes with the hero diagram.</li>
+      <li>Mix panel treatments (bezel + screen + knobs) with bare traces (no bezel) for rhythm — don't repeat one asset four times.</li>
+    </ul>
+  </section>
+
+  <section id="iconography">
+    <h2>Iconography</h2>
+    <p class="section-desc">Use <a href="https://lucide.dev" target="_blank" rel="noopener">Lucide</a> exclusively — it's what Great Docs ships (1,900+ icons, theme-aware via <code class="mono">currentColor</code>), so nav and inline icons match automatically between the marketing site and the docs site with zero extra assets. Stroke width 2, 20px in nav contexts, 1em inline.</p>
+
+    <div class="row" style="gap:28px; margin:20px 0 8px;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+        <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><polyline points="1 11 5 11 7.5 4 11.5 17 14 11 18.5 11" stroke="var(--text)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="mono" style="font-size:11px; color:var(--text-muted);">activity</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+        <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><ellipse cx="10" cy="4.2" rx="7" ry="2.2" stroke="var(--text)" stroke-width="1.7"/><path d="M3 4.2v11.6a7 2.2 0 0 0 14 0V4.2" stroke="var(--text)" stroke-width="1.7"/><path d="M3 10a7 2.2 0 0 0 14 0" stroke="var(--text)" stroke-width="1.7"/></svg>
+        <span class="mono" style="font-size:11px; color:var(--text-muted);">database</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+        <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><rect x="1.5" y="2.5" width="17" height="15" rx="2" stroke="var(--text)" stroke-width="1.7"/><polyline points="4.5 7 8.5 10 4.5 13" stroke="var(--text)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><line x1="10.5" y1="13" x2="15" y2="13" stroke="var(--text)" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <span class="mono" style="font-size:11px; color:var(--text-muted);">terminal</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+        <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M2 4.5c2-1 5.5-1 8 0v12c-2.5-1-6-1-8 0z" stroke="var(--text)" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 4.5c-2-1-5.5-1-8 0v12c2.5-1 6-1 8 0z" stroke="var(--text)" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        <span class="mono" style="font-size:11px; color:var(--text-muted);">book-open</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+        <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M10 1.5 L17.5 4.5 V9.5 C17.5 14 14.5 17 10 18.5 C5.5 17 2.5 14 2.5 9.5 V4.5 Z" stroke="var(--text)" stroke-width="1.6" stroke-linejoin="round"/><path d="M6.3 9.8 L9 12.5 L13.7 7" stroke="var(--text)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="mono" style="font-size:11px; color:var(--text-muted);">shield-check</span>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:18px;">Weight and rounding match this set exactly — 1.7–2 stroke, rounded caps and joins, no fill. A thinner or squared-off icon next to these will read as off-brand even in the right color.</p>
+
+    <h3>Nav mapping</h3>
+    <p class="note" style="margin-bottom:8px;">Drop straight into <code class="mono">great-docs.yml</code> — real icon choices for this site's actual nav, not placeholders.</p>
+    <div class="code-block">nav_icons:
+  navbar:
+    Standards: shield-check
+    User Guide: book-open
+    SDK: terminal
+  sidebar:
+    PoC/MVP PRD: rocket
+    Delivery plan: map
+    Architecture v1.5: layout-template
+    OTDP: activity
+    Registry: database
+    Execution: play-circle
+    Interface: plug
+    Plugin UI: layout-template
+    Device developer guide: cpu
+    AI device reviewer: bot
+    Development &amp; CI: git-branch</div>
+  </section>
+
+  <section id="logo">
+    <h2>Logo</h2>
+    <p class="section-desc">One mark, built from the same grammar as the hero diagram: the gateway's hexagon, and the amber-under/blue-over wire-hop that stands for "weave" everywhere else on the site. Not a separate decoration — the same visual idea, just small enough for a nav bar.</p>
+    <div class="grid-2">
+      <div class="swatch" style="padding:36px 0; display:flex; align-items:center; justify-content:center; background:var(--bg-inset);">
+        <svg width="72" height="72" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="var(--amber-solid)" stroke-width="1.4"/>
+          <path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="var(--amber-solid)" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M17 7 L7 17" stroke="var(--blue-solid)" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="swatch" style="padding:36px 0; display:flex; align-items:center; justify-content:center; background:#1B2027;">
+        <svg width="72" height="72" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="#FFB020" stroke-width="1.4"/>
+          <path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="#FFB020" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M17 7 L7 17" stroke="#8AA0FF" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <p class="note" style="margin-top:14px;">Reads the same way at both scales the site needs: as a favicon glyph (the hexagon silhouette alone) and as a nav-bar mark (hexagon + weave visible). Below 16px, drop the hop detail and render the crossing as a plain X — it'll still read as an interlace.</p>
+    <h3>Usage</h3>
+    <ul style="color:var(--text-muted); padding-left:20px; font-size:14.5px;">
+      <li>Minimum size: 16px (favicon). Below that, use the hexagon outline alone.</li>
+      <li>Clearspace: half the hexagon's width on every side — don't crowd it against the wordmark or a rule line.</li>
+      <li>Colors are fixed (Trace Amber hexagon + amber/blue weave) in both themes — the mark does not invert or go monochrome.</li>
+      <li>Don't recolor the two strands to match a page's accent, don't stretch the hexagon, don't add a drop shadow.</li>
+    </ul>
+    <p class="note" style="margin-top:10px;">Export as <code class="mono">assets/logo.svg</code> for both themes (the amber/blue pairing already holds contrast on light and dark) — no separate <code class="mono">logo-dark.svg</code> needed unless the hexagon stroke itself needs to shift for contrast. Great Docs auto-generates favicons from this file; see the mapping below.</p>
+
+    <h3>Sub-brands</h3>
+    <p class="section-desc" style="margin-bottom:16px;">Properties that would be genuinely separate from the gateway if they ship as their own thing — different repo or different domain, different audience, someone can land there with zero other context. Same mark, same two colors, always. What changes is deliberately small and means something specific each time.</p>
+    <div class="swatch" style="padding:22px 24px; margin-bottom:18px;">
+      <p style="margin:0 0 10px; font-size:14px; color:var(--text-muted);"><strong style="color:var(--text);">Registry isn't here yet</strong> — the contract page inside Standards doesn't need its own mark today. This variant is prepared for if/when a hosted registry ships as its own service (a real <code class="mono">registry.benchweave.dev</code> that plugin authors publish to) — publishers rather than readers, same case as SDK.</p>
+      <p style="margin:0; font-size:14px; color:var(--text-muted);"><strong style="color:var(--text);">Standards isn't external yet</strong> — right now it's pages inside the main site's nav, and the page title already says where you are. This variant is prepared for if/when the contracts move to their own domain (a spec site implementers reference independent of the gateway) — a reader who's never touched benchweave.dev could land straight on a contract page.</p>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px;">
+      <div class="swatch" style="padding:26px 0; display:flex; flex-direction:column; align-items:center; gap:11px; background:#1B2027;">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="#FFB020" stroke-width="1.4"/>
+          <path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="#FFB020" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M17 7 L7 17" stroke="#8AA0FF" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <div style="font-family:var(--font-display); font-weight:600; font-size:14px; color:#ECEFEE;">BenchWeave</div>
+        <div class="mono" style="font-size:10.5px; color:#A7B0B8; text-align:center; padding:0 10px;">gateway + standards<br>solid hex · weave</div>
+      </div>
+      <div class="swatch" style="padding:26px 0; display:flex; flex-direction:column; align-items:center; gap:11px; background:#1B2027;">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="#FFB020" stroke-width="1.4" stroke-dasharray="2.6 2.3"/>
+          <path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="#FFB020" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M17 7 L7 17" stroke="#8AA0FF" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-family:var(--font-display); font-weight:600; font-size:14px; color:#ECEFEE;">BenchWeave</span>
+          <span class="mono" style="font-size:10px; color:#1B2027; background:#FFB020; padding:1.5px 5px; border-radius:999px; font-weight:600;">SDK</span>
+        </div>
+        <div class="mono" style="font-size:10.5px; color:#A7B0B8; text-align:center; padding:0 10px;">plugin authoring<br>dashed hex · weave</div>
+      </div>
+      <div class="swatch" style="padding:26px 0; display:flex; flex-direction:column; align-items:center; gap:11px; background:#1B2027;">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="#FFB020" stroke-width="1.4"/>
+          <rect x="7" y="9.2" width="10" height="1.7" rx="0.85" fill="#FFB020"/>
+          <rect x="7" y="12" width="10" height="1.7" rx="0.85" fill="#FFB020"/>
+          <rect x="7" y="14.8" width="7" height="1.7" rx="0.85" fill="#FFB020"/>
+        </svg>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-family:var(--font-display); font-weight:600; font-size:14px; color:#ECEFEE;">BenchWeave</span>
+          <span class="mono" style="font-size:10px; color:#1B2027; background:#FFB020; padding:1.5px 5px; border-radius:999px; font-weight:600;">Registry</span>
+        </div>
+        <div class="mono" style="font-size:10.5px; color:#A7B0B8; text-align:center; padding:0 10px;">not yet built<br>solid hex · stack glyph</div>
+      </div>
+      <div class="swatch" style="padding:26px 0; display:flex; flex-direction:column; align-items:center; gap:11px; background:#1B2027;">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="#FFB020" stroke-width="1.4"/>
+          <path d="M6.5 8 H13 L17.5 12 L13 16 H6.5 Z" fill="#FFB020"/>
+          <circle cx="9.3" cy="12" r="1.1" fill="#1B2027"/>
+        </svg>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-family:var(--font-display); font-weight:600; font-size:14px; color:#ECEFEE;">BenchWeave</span>
+          <span class="mono" style="font-size:10px; color:#1B2027; background:#FFB020; padding:1.5px 5px; border-radius:999px; font-weight:600;">Standards</span>
+        </div>
+        <div class="mono" style="font-size:10.5px; color:#A7B0B8; text-align:center; padding:0 10px;">not yet external<br>solid hex · tag glyph</div>
+      </div>
+    </div>
+    <ul style="color:var(--text-muted); padding-left:20px; font-size:14.5px; margin-top:16px;">
+      <li><strong style="color:var(--text);">Why dashed for SDK, not for the others:</strong> dashed means "blueprint, not a running system" — true of the SDK (it scaffolds code), false of a hosted registry or a published spec site (both would be live, "shipped" properties, same status as the gateway). So registry and standards both stay solid.</li>
+      <li><strong style="color:var(--text);">Why a new glyph instead of another line trick, every time:</strong> the weave-cross specifically means "connects two different kinds of node" — instrument to DUT, through the gateway. Neither registry nor standards do that, so neither gets a re-skinned weave. Registry stores and shares one kind of thing → the stack glyph already on its hero node. Standards publishes versioned, tagged contracts → a tag glyph, the same shape a release tag already means in this ecosystem.</li>
+      <li>The <code class="mono">SDK</code> / <code class="mono">Registry</code> / <code class="mono">Standards</code> pills all follow one rule: required where two of these properties could be confused for each other, optional inside a property's own nav where context already disambiguates it.</li>
+      <li>That's three variants prepared, one deployed. A fifth property should still reach for its own grounded glyph, not a fourth line style — solid/dashed stops being reliably distinguishable at nav size past two, which is exactly why registry and standards differentiate by glyph instead.</li>
+    </ul>
+  </section>
+
+  <section id="greatdocs">
+    <h2>Great Docs mapping</h2>
+    <p class="section-desc">The user guides and versioned standards run on <a href="https://posit-dev.github.io/great-docs/" target="_blank" rel="noopener">Great Docs</a> (Quarto-based). It themes entirely through <code class="mono">great-docs.yml</code> — no custom CSS required for the tokens below. Gradient <code class="mono">navbar_style</code>/<code class="mono">content_style</code> presets are built-in only (sky, peach, prism, lilac, slate, honey, dusk, mint) and none match Trace Amber, so use flat <code class="mono">navbar_color</code> for brand accuracy rather than a preset gradient.</p>
+    <table class="gd-map">
+      <tr><th>Token</th><th>great-docs.yml key</th><th>Value</th></tr>
+      <tr><td>Accent (buttons, hr shortcode, gradients)</td><td><code>accent_color</code></td><td><code>{ light: "#C6790A", dark: "#FFB020" }</code></td></tr>
+      <tr><td>Navbar background</td><td><code>navbar_color</code></td><td><code>{ light: "#EEF1F0", dark: "#1B2027" }</code></td></tr>
+      <tr><td>Wordmark</td><td><code>display_name</code></td><td><code>"BenchWeave"</code></td></tr>
+      <tr><td>Domain / canonical URL</td><td><code>_quarto.yml</code>: <code>website.site-url</code></td><td><code>https://benchweave.dev</code></td></tr>
+      <tr><td>Logo (light/dark)</td><td><code>logo</code></td><td><code>assets/logo.svg</code> / <code>assets/logo-dark.svg</code> — auto-generates favicons</td></tr>
+      <tr><td>Fonts</td><td><code>include_in_header</code></td><td>Inject the same Google Fonts <code>&lt;link&gt;</code> tags used here (Space Grotesk, IBM Plex Sans, IBM Plex Mono) plus one line of custom SCSS to apply them</td></tr>
+      <tr><td>Banner semantics</td><td><code>announcement.type</code></td><td>info / warning / success / danger — already 1:1 with the badge component above</td></tr>
+    </table>
+    <p class="note" style="margin-top:10px;">The domain row is the one exception in this table — it's Quarto's own <code class="mono">website.site-url</code> in <code class="mono">_quarto.yml</code>, the project file Great Docs sits on top of, not <code class="mono">great-docs.yml</code> itself. It drives canonical tags, the sitemap, and social-card URLs.</p>
+  </section>
+
+  <section id="voice">
+    <h2>Voice &amp; tone</h2>
+    <p class="section-desc">Write like the README, not like a landing page.</p>
+    <ul style="color:var(--text-muted); padding-left:20px;">
+      <li>Active voice, present tense: "Connects instruments through reusable plugins," not "Instruments can be connected."</li>
+      <li>State status honestly. "Architecture baseline and Python scaffold" is the actual status line — use it instead of inventing a more finished-sounding one.</li>
+      <li>Name real things: OTDP, the registry, the five steps — not "our platform" or "powerful integrations."</li>
+      <li>No exclamation points, no "seamless," no "just three commands" unless it's literally three commands.</li>
+    </ul>
+  </section>
+
+  <section id="accessibility" style="margin-bottom:24px;">
+    <h2>Accessibility floor</h2>
+    <ul style="color:var(--text-muted); padding-left:20px;">
+      <li>Body text meets 4.5:1 contrast in both themes; the light-mode amber/blue text shades exist specifically to hold this on white.</li>
+      <li>Every interactive element has a visible focus ring (inherit from <code class="mono">:focus-visible</code>, 2px, Signal Blue).</li>
+      <li>Respect <code class="mono">prefers-reduced-motion</code> — the one hero animation degrades to a static state.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+  function applyStoredTheme() {
+    try {
+      const saved = localStorage.getItem('bw-style-guide-theme');
+      if (saved === 'dark' || saved === 'light') {
+        document.documentElement.setAttribute('data-theme', saved);
+      }
+    } catch (e) { /* storage unavailable, fall back to system preference */ }
+  }
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const isDark = current === 'dark' || (!current && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('bw-style-guide-theme', next); } catch (e) {}
+  }
+  applyStoredTheme();
+</script>
+
+</body>
+</html>
