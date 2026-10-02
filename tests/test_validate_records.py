@@ -14,6 +14,8 @@ from typing import Any
 import pytest
 import validate_records as vr
 
+REPO = Path(__file__).resolve().parents[1]
+
 HEX64 = "a" * 64
 HEX40 = "b" * 40
 
@@ -260,7 +262,7 @@ def test_main_returns_zero_on_valid_tree(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _manifest, _publish = _consistent_release(tmp_path, copy.deepcopy(_DEPS))
-    assert vr.main(str(tmp_path)) == 0
+    assert vr.main(["--root", str(tmp_path)]) == 0
     assert "2 records valid" in capsys.readouterr().out
 
 # --- M1 (CR-35 fold): the published tree refuses dev-lineage ---------------------
@@ -467,4 +469,103 @@ def test_traversal_shaped_release_dir_refuses(tmp_path: Path) -> None:
     (evil / "manifest.json").write_bytes(b"{}")
     findings = vr.validate_tree(sandbox)
     assert any(f.startswith("release_path_unsafe:") for f in findings), findings
+
+# --- fold R2/R5 (2026-10-02 round-2 refute) ------------------------------------
+
+
+def _yank_record() -> dict[str, Any]:
+    return {
+        "record_type": "lifecycle",
+        "record_version": "1.0.0",
+        "kind": "admitted-release",
+        "created_at": "2026-10-02T00:00:00Z",
+        "actor": "madeinoz67",
+        "lifecycle": {
+            "op": "yank",
+            "publisher": "madeinoz67",
+            "plugin": "dps150",
+            "version": "0.1.0",
+            "reason": "synthetic yank for the coherence arm",
+        },
+    }
+
+
+def _yank_tree_with(root: Path, status: dict[str, Any] | None) -> Path:
+    """A release tree plus a canonical yank record; ``status`` plants the
+    release's status.json when given (R2's plants are deliberately minimal:
+    the records-validity gate reads the lifecycle only)."""
+    manifest_path = _mini_release(root, [], None)
+    yank_dir = root / "records" / "lifecycle" / "madeinoz67" / "dps150" / "0.1.0"
+    yank_dir.mkdir(parents=True, exist_ok=True)
+    (yank_dir / "2-yank.json").write_bytes(vr.canonical_bytes(_yank_record()))
+    if status is not None:
+        (manifest_path.parent / "status.json").write_bytes(vr.canonical_bytes(status))
+    return root
+
+
+def test_yank_record_without_a_status_document_is_refused(tmp_path: Path) -> None:
+    """R2 (lane A F2): records.schema.json admits op:yank, but nothing
+    consumed the record — a canonical yank with no governing status.json was
+    silently inert with every gate green. The coherence rule refuses loudly;
+    status.json stays the single catalogue authority (Q8) and the generator
+    still honours only status documents, never yank records."""
+    _yank_tree_with(tmp_path, None)
+    findings = vr.validate_tree(tmp_path)
+    assert any(f.startswith("yank_record_without_status:") for f in findings), findings
+
+
+def test_yank_record_with_a_published_status_document_is_refused(tmp_path: Path) -> None:
+    """R2's second arm: a status document whose lifecycle is not
+    yanked-or-revoked does not govern the yank."""
+    _yank_tree_with(tmp_path, {"lifecycle": "published"})
+    findings = vr.validate_tree(tmp_path)
+    assert any(f.startswith("yank_record_without_status:") for f in findings), findings
+
+
+def test_yank_record_with_a_yanked_status_document_passes(tmp_path: Path) -> None:
+    """R2 control: the coherent shape — the yank record and the status
+    document that makes it true — stays green."""
+    _yank_tree_with(tmp_path, {"lifecycle": "yanked"})
+    assert vr.validate_tree(tmp_path) == []
+
+
+def test_cli_root_flag_routes_to_the_given_tree(tmp_path: Path) -> None:
+    """R5 (lane A F4): ``--root`` actually routes. The pre-fold CLI ignored
+    the flag entirely and validated its own tree — exit 0 reporting the
+    REPO's record count, a silent lie this arm pins shut."""
+    import subprocess
+    import sys as _sys
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    result = subprocess.run(
+        [_sys.executable, str(REPO / "scripts" / "validate_records.py"),
+         "--root", str(empty)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "0 records valid" in result.stdout, (
+        f"--root did not route (the validator reported its own tree): {result.stdout!r}"
+    )
+
+
+def test_cli_refuses_unknown_arguments(tmp_path: Path) -> None:
+    """R5's second arm: unknown arguments refuse (argparse exit 2) instead
+    of being silently ignored."""
+    import subprocess
+    import sys as _sys
+
+    result = subprocess.run(
+        [_sys.executable, str(REPO / "scripts" / "validate_records.py"),
+         "--frobnicate", "1"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2, (
+        f"unknown arguments must refuse with argparse's exit 2, got "
+        f"{result.returncode}: {result.stdout + result.stderr}"
+    )
 

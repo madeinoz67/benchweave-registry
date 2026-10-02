@@ -1,0 +1,7 @@
+{
+  "comment": "Digest pin for the vendored release-status schema (copy-never-move: the gateway's standards corpus stays the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). Repinning discipline: recompute sha256 against the origin bytes at the new origin commit and update source+sha256 together in one commit. Fold R6 (2026-10-02): the origin citation is a gateway MAIN commit — the digest was measured byte-identical at the slice-2 branch tip and at main (638256957baf…), so citing the unmerged branch tip was the fragile form; the re-citation moved source only, never bytes or sha256.",
+  "source": "madeinoz67/benchweave@ece47b92d211342246cc6ba67a4ae3a72bc1fb80:standards/registry/0.1.1/release-status.schema.json",
+  "sha256": "638256957baf214a0c9d2a2f69e929eabb83e3bd710cdc8642cef89a8d8844f4",
+  "vendored_path": "vendored/gateway/release-status.schema.json",
+  "pinned_date": "2026-10-02"
+}

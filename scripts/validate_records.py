@@ -11,6 +11,11 @@ separators, one trailing newline), schema-valid against
   closure digest than the one published, is refused (CR-38);
 - no dev-prefixed registry id appears anywhere in the records or the published
   releases (CR-35's index half);
+- a yank record whose release carries no ``status.json`` with lifecycle
+  yanked-or-revoked is refused (fold R2, round-2 refute): ``status.json`` is
+  the single catalogue authority (Q8) and the generator honours status
+  documents only — the coherence rule keeps a canonical yank record from
+  being silently inert;
 - the review block inside a published release's manifest pins the review
   record's own canonical digest, and the record's closure digest matches the
   manifest's dependency closure (the review-to-sign swap defense, CR-11/CR-14).
@@ -21,6 +26,7 @@ half, and identified human review remains the accountable one.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import sys
@@ -194,6 +200,41 @@ def validate_tree(root: Path) -> list[str]:
         if parsed.get("record_type") != "lifecycle":
             continue
         lifecycle = parsed.get("lifecycle", {})
+        if lifecycle.get("op") == "yank":
+            # Fold R2 (lane A F2, round-2 refute): a canonical yank record
+            # whose release lacks a status.json with lifecycle yanked or
+            # revoked is INERT — the row stays served, every gate green,
+            # because the generator honours status documents only. The
+            # coherence rule makes the trap loud while keeping status.json
+            # the single catalogue authority (Q8); the generator does NOT
+            # honour yank records directly.
+            yank_key = (
+                lifecycle.get("publisher"),
+                lifecycle.get("plugin"),
+                lifecycle.get("version"),
+            )
+            governed = False
+            yank_manifest = manifests.get(yank_key)
+            if yank_manifest is not None:
+                yank_status = yank_manifest.parent / "status.json"
+                if yank_status.is_file():
+                    try:
+                        yank_status_doc: Any = json.loads(yank_status.read_bytes())
+                    except ValueError:
+                        yank_status_doc = None
+                    if (
+                        isinstance(yank_status_doc, dict)
+                        and yank_status_doc.get("lifecycle") in ("yanked", "revoked")
+                    ):
+                        governed = True
+            if not governed:
+                findings.append(
+                    f"yank_record_without_status:{path.name}: no status.json with "
+                    f"lifecycle yanked|revoked governs {'/'.join(str(k) for k in yank_key)} "
+                    "— the catalogue serves the row unchanged (status.json is the "
+                    "single authority, Q8)"
+                )
+            continue
         if lifecycle.get("op") != "publish":
             continue
         if "closure" not in lifecycle:
@@ -255,11 +296,13 @@ def validate_tree(root: Path) -> list[str]:
 
 
 def main(argv: list[str] | str | None = None) -> int:
-    root = REPO
-    if isinstance(argv, str):
-        root = Path(argv).resolve()
-    elif argv:
-        root = Path(argv[0]).resolve()
+    """The records-validity CLI (fold R5): ``--root`` routes like its sibling
+    gates — the pre-fold entry point ignored unknown arguments entirely and
+    validated its own tree, exit 0, whatever it was handed."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=REPO)
+    args = parser.parse_args([argv] if isinstance(argv, str) else argv)
+    root = args.root.resolve()
     findings = validate_tree(root)
     for finding in findings:
         print(f"validate_records: {finding}", file=sys.stderr)

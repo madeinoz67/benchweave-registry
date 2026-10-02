@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plugin catalogue — BenchWeave</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/catalogue.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wordmark">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="var(--amber-solid)" stroke-width="1.6"/>
+      <path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="var(--amber-solid)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M17 7 L7 17" stroke="var(--blue-solid)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    BenchWeave
+  </div>
+  <nav class="toc" aria-label="Site">
+    <a href="https://github.com/madeinoz67/benchweave">gateway repository →</a>
+    <a href="https://github.com/madeinoz67/benchweave-registry/tree/main/releases">releases →</a>
+  </nav>
+</header>
+
+<main>
+  <div class="intro-head">
+    <p class="eyebrow mono">Registry · catalogue</p>
+    <h1>Plugin catalogue</h1>
+    <p>The catalogue of published releases, rendered from the registry repository of record.</p>
+    <p class="note">There is no hosted registry — this page is generated from a git repository
+    of record. Publication is discovery and provenance, never authorization: installing a
+    plugin stays local admission on your own bench. Unverified markers ride every row
+    (process review is not proof).</p>
+  </div>
+
+  <section id="catalogue">
+    <div class="filter-bar" role="search" aria-label="Filter plugins">
+      <label>Search <input type="text" id="bw-filter-text" placeholder="name, id or summary"></label>
+      <label>Publisher <select id="bw-filter-publisher">
+        <option value="all" selected>any</option>
+      </select></label>
+      <label>Standard <select id="bw-filter-standard">
+        <option value="all" selected>any</option>
+      </select></label>
+      <label>Signature <select id="bw-filter-signature">
+        <option value="all">any</option>
+        <option value="signed-valid" selected>signed</option>
+        <option value="unsigned">unsigned</option>
+      </select></label>
+      <label>Maintenance <select id="bw-filter-maintenance">
+        <option value="all" selected>any</option>
+        <option value="maintained">maintained</option>
+        <option value="maintenance_only">maintenance only</option>
+        <option value="unmaintained">unmaintained</option>
+        <option value="unknown">unknown</option>
+      </select></label>
+      <label>Advisories <select id="bw-filter-advisories">
+        <option value="all" selected>any</option>
+        <option value="present">present</option>
+        <option value="none">none</option>
+      </select></label>
+      <label>Kind <select id="bw-filter-kind">
+        <option value="all">all kinds</option>
+        <option value="admitted-release" selected>admitted releases</option>
+        <option value="community-shared">community shared</option>
+        <option value="in-tree-fixture">in-tree fixture</option>
+      </select></label>
+      <label><input type="checkbox" id="bw-filter-cap-network"> Network egress</label>
+      <label><input type="checkbox" id="bw-filter-cap-subprocess"> Subprocess or native library</label>
+      <label><input type="checkbox" id="bw-filter-cap-filesystem"> Filesystem writes</label>
+    </div>
+    <p id="catalogue-count" class="catalogue-meta" aria-live="polite"></p>
+    <p id="catalogue-notice" class="note" hidden>The catalogue could not be refreshed from the
+    index — the rows below are the generated view. Filtering needs the index; the identity,
+    evidence and advisory fields on each card stand.</p>
+    <div class="spec-grid" id="catalogue-list">
+<!-- bw:catalogue-cards begin -->
+<!-- bw:catalogue-cards end -->
+    </div>
+    <p id="catalogue-empty" hidden>No releases match the current filters.</p>
+  </section>
+</main>
+
+<footer class="page-foot">
+  <p class="catalogue-meta"><!-- bw:provenance --></p>
+</footer>
+
+<script src="assets/plugins.js"></script>
+</body>
+</html>

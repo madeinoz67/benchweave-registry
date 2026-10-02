@@ -30,6 +30,28 @@ _UNVERIFIED_MARKERS = [
     "review-is-process-not-proof",
 ]
 
+#: The release-status schema this repository vendors (digest-pinned against
+#: the gateway's standards/registry/0.1.1 origin — see
+#: vendored/gateway/release-status.pin.json). The lifecycle enum lives HERE,
+#: never in a hand list: this generator and scripts/validate_release_status.py
+#: are the two consumers of the one authority (issue #224 slice-2 pivot §3.2).
+_RELEASE_STATUS_SCHEMA = REPO / "vendored" / "gateway" / "release-status.schema.json"
+
+
+def _lifecycle_enum() -> tuple[str, ...]:
+    try:
+        schema = json.loads(_RELEASE_STATUS_SCHEMA.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(
+            f"generate_index: status_schema_unreadable: {_RELEASE_STATUS_SCHEMA}: {exc}"
+        ) from exc
+    enum = schema["properties"]["lifecycle"]["enum"]
+    return tuple(str(value) for value in enum)
+
+
+#: The settled lifecycle values (published | deprecated | yanked | revoked).
+LIFECYCLE_ENUM: tuple[str, ...] = _lifecycle_enum()
+
 _SCHEMA_CACHE: jsonschema.Draft202012Validator | None = None
 
 
@@ -88,7 +110,8 @@ def generate(root: Path) -> bytes:
             if len(parts) != 5 or parts[-1] != "manifest.json":
                 continue
             _registry_id, publisher, plugin, version, _name = parts
-            manifest = json.loads(manifest_path.read_bytes())
+            manifest_bytes = manifest_path.read_bytes()
+            manifest = json.loads(manifest_bytes)
             # Fold M3: identity comes from the PATH and the manifest must
             # agree; duplicate identities refuse.
             row_key = (publisher, plugin, version)
@@ -117,7 +140,70 @@ def generate(root: Path) -> bytes:
                     )
                     continue
             release_dir = manifest_path.parent
+            # The status document is the single authority for lifecycle and
+            # advisories (Q8: origin status/lifecycle files remain the
+            # mechanism — the same served state file stock gateways consult).
+            # Yank arm, hardened (issue #224 slice-2 pivot §3.2, CR-25):
+            #   - lifecycle yanked or revoked DROPS the row — discovery must
+            #     not offer what admission already refuses; the record and
+            #     git history retain it;
+            #   - a PRESENT lifecycle outside the enum REFUSES the run
+            #     (fail-closed: the pre-pivot generator silently kept the
+            #     row — the exact HIGH all four refute lanes flagged), so
+            #     `Yanked`, `yank`, `retired`, null, a list value, or a
+            #     missing lifecycle key all refuse, naming the row;
+            #   - a status document that is not parseable JSON, not an
+            #     object, or NOT A REGULAR FILE refuses with
+            #     `index_status_unparseable:` (typed; never a bare
+            #     traceback) — a directory-shaped status.json never reads
+            #     as absent (fold R4, round-2 refute);
+            #   - a PRESENT status document is BOUND to its directory: the
+            #     schema-required release block must equal the directory's
+            #     identity plus the manifest digest on disk — mismatch
+            #     refuses with `index_status_mismatch:` (fold R1);
+            #   - an ABSENT status.json keeps the row (the dogfood's shape,
+            #     unchanged). Zero format motion: only which rows exist.
+            status_path = release_dir / "status.json"
+            row_id = f"{publisher}/{plugin}/{version}"
+            if status_path.exists() and not status_path.is_file():
+                problems.append(
+                    f"index_status_unparseable:{row_id}: "
+                    "status path is present but not a regular file"
+                )
+                continue
             status: dict[str, Any] = {}
+            if status_path.is_file():
+                try:
+                    parsed_status: Any = json.loads(status_path.read_bytes())
+                except ValueError as exc:
+                    problems.append(f"index_status_unparseable:{row_id}: {exc}")
+                    continue
+                if not isinstance(parsed_status, dict):
+                    problems.append(
+                        f"index_status_unparseable:{row_id}: "
+                        "status document is not a JSON object"
+                    )
+                    continue
+                status = parsed_status
+                expected_release: dict[str, str] = {
+                    "registry_id": str(parts[0]),
+                    "package_id": f"{publisher}/{plugin}",
+                    "version": str(version),
+                    "manifest_sha256": sha256_hex(manifest_bytes),
+                }
+                claimed_release: object = status.get("release")
+                if claimed_release != expected_release:
+                    problems.append(
+                        f"index_status_mismatch:{row_id}: "
+                        f"names {claimed_release!r}, governs {expected_release}"
+                    )
+                    continue
+                lifecycle: Any = status.get("lifecycle")
+                if lifecycle not in LIFECYCLE_ENUM:
+                    problems.append(f"index_status_invalid:{lifecycle!r} ({row_id})")
+                    continue
+                if lifecycle in ("yanked", "revoked"):
+                    continue
             review_record = reviews.get((publisher, plugin, version), {})
             review = review_record.get("review", {})
             publish = publishes.get((publisher, plugin, version), {})
@@ -135,7 +221,7 @@ def generate(root: Path) -> bytes:
                     "version": manifest["version"],
                     "kind": review_record.get("kind", "admitted-release"),
                     "publisher": manifest.get("publisher_id", publisher),
-                    "manifest_sha256": sha256_hex(manifest_path.read_bytes()),
+                    "manifest_sha256": sha256_hex(manifest_bytes),
                     "signature_state": publish.get(
                         "signature_state",
                         "signed-valid" if (release_dir / "manifest.sig").is_file() else "unsigned",

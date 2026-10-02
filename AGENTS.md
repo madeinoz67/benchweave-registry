@@ -42,15 +42,23 @@ gateway-tracker issue in their body; no PR merges without one.
 
 ## 4. Web surface uses the MAIN repo's styleguide (hard convention)
 
-The catalogue/search website a later slice renders from the index uses the
-**main BenchWeave repository's public-site styleguide** —
-`docs/internal/public-site-styleguide.html` in `madeinoz67/benchweave`
-("BenchWeave — Public Site Style Guide": Space Grotesk / IBM Plex Sans /
-IBM Plex Mono, the family's public design language). One design language
-across the family; **no second component library, no new design system**
-(the PRD-11 rule). Console-shaped surfaces follow the main repo's
-`docs/internal/ui-styleguide.md`. The reference is pinned to those files; do
-not guess or fork a styleguide here.
+The catalogue page rendered from the index uses the **main BenchWeave
+repository's public-site styleguide** — `docs/internal/public-site-styleguide.html`
+in `madeinoz67/benchweave` ("BenchWeave — Public Site Style Guide": Space
+Grotesk / IBM Plex Sans / IBM Plex Mono, the family's public design
+language). One design language across the family; **no second component
+library, no new design system** (the PRD-11 rule). Console-shaped surfaces
+follow the main repo's `docs/internal/ui-styleguide.md`. The reference is
+pinned to those files; do not guess or fork a styleguide here.
+
+The in-repo operative copy is the **digest-pinned vendor** at
+`vendored/gateway/public-site-styleguide.html` (its `.pin.json` cites the
+gateway origin; repinning is a deliberate recorded edit). The catalogue's
+CSS (`catalogue/assets/catalogue.css`) copies the vendor's token blocks
+verbatim and every `var()` it references must resolve there — pinned by
+`tests/test_styleguide_tokens.py`. The page itself carries no version-literal
+gate (generation discipline, not scanning — see the README's catalogue
+section); the generator's literal refusal covers structural slots only.
 
 ## 5. Agent working rules (the family posture)
 

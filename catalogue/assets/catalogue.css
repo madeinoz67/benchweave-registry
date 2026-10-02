@@ -1,0 +1,148 @@
+/* BenchWeave plugin catalogue (issue #224 slice-2 pivot).
+   Token discipline: the :root custom-property blocks below are copied
+   VERBATIM from the vendored public-site styleguide
+   (vendored/gateway/public-site-styleguide.html — the gateway repo's
+   authored authority); every other rule consumes those tokens and no new
+   color, font, radius or shadow value is introduced. Component shapes are
+   the styleguide's own (spec-card, badges, filter bar, catalogue meta
+   line); tests/test_catalogue_page.py asserts every var() below resolves
+   in the token block. */
+
+:root {
+  --bg: #EEF1F0;
+  --bg-elevated: #FFFFFF;
+  --bg-inset: #E3E7E5;
+  --text: #1B2027;
+  --text-muted: #565F68;
+  --border: #D6DBD9;
+  --border-strong: #B7BEBB;
+  --amber: #C6790A;      /* text/icon-safe shade of Trace Amber on light bg */
+  --amber-solid: #FFB020; /* raw brand amber for fills */
+  --amber-on: #1B2027;
+  --blue: #3355E0;
+  --blue-solid: #4C6FFF;
+  --green: #1F8F5F;
+  --green-solid: #3FB27F;
+  --red: #C82F35;
+  --red-solid: #E5484D;
+  --grid-line: rgba(27,32,39,0.06);
+  --shadow: 0 1px 2px rgba(27,32,39,0.08);
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1B2027;
+    --bg-elevated: #232A33;
+    --bg-inset: #161B21;
+    --text: #ECEFEE;
+    --text-muted: #A7B0B8;
+    --border: #333C46;
+    --border-strong: #46505C;
+    --amber: #FFB020;
+    --amber-on: #1B2027;
+    --blue: #8AA0FF;
+    --green: #3FD394;
+    --red: #FF6B70;
+    --grid-line: rgba(236,239,238,0.06);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1B2027;
+  --bg-elevated: #232A33;
+  --bg-inset: #161B21;
+  --text: #ECEFEE;
+  --text-muted: #A7B0B8;
+  --border: #333C46;
+  --border-strong: #46505C;
+  --amber: #FFB020;
+  --amber-on: #1B2027;
+  --blue: #8AA0FF;
+  --green: #3FD394;
+  --red: #FF6B70;
+  --grid-line: rgba(236,239,238,0.06);
+  --shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--blue); }
+code, .mono { font-family: var(--font-mono); }
+.text-muted { color: var(--text-muted); }
+
+header.top {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.wordmark { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 600; font-size: 18px; }
+.wordmark svg { display: block; }
+nav.toc { display: flex; gap: 20px; font-size: 14px; }
+nav.toc a { color: var(--text-muted); text-decoration: none; }
+nav.toc a:hover { color: var(--text); }
+
+main { max-width: 980px; margin: 0 auto; padding: 48px 28px 96px; }
+
+.intro-head { padding: 40px 0 32px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+.intro-head .eyebrow { font-family: var(--font-mono); font-size: 13px; color: var(--amber); margin: 0 0 12px; }
+.intro-head h1 { font-family: var(--font-display); font-size: 34px; font-weight: 700; margin: 0 0 14px; letter-spacing: -0.01em; }
+.intro-head p { max-width: 62ch; color: var(--text-muted); font-size: 15px; margin: 0 0 10px; }
+.intro-head p:first-of-type { color: var(--text); font-size: 16px; }
+p.note { color: var(--text-muted); font-size: 14px; max-width: 62ch; }
+
+/* filter bar (styleguide v0.2 component) */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.filter-bar label { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+.filter-bar input[type="text"], .filter-bar select { font-family: var(--font-body); font-size: 13.5px; color: var(--text); background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 9px; }
+.filter-bar input[type="checkbox"] { accent-color: var(--blue); }
+
+/* catalogue meta line (styleguide v0.2 component) */
+.catalogue-meta { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); margin: 8px 0; }
+
+/* the card grid (the styleguide swatch-grid pattern at card width) */
+.spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+
+/* spec card (styleguide component) */
+.spec-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px; background: var(--bg-elevated); box-shadow: var(--shadow); }
+.spec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.spec-card h4 { font-family: var(--font-display); font-size: 16px; margin: 0; }
+.spec-card p { font-size: 13.5px; color: var(--text-muted); margin: 6px 0; }
+.spec-card code { background: var(--bg-inset); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+.spec-link { font-size: 13.5px; text-decoration: none; white-space: nowrap; }
+.spec-link:hover { text-decoration: underline; }
+
+/* badges (styleguide component — the four semantic tones) */
+.badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border-strong); }
+.badge-version { background: var(--bg-inset); color: var(--text); }
+.badge-info { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, transparent); }
+.badge-warning { background: color-mix(in srgb, var(--amber-solid) 18%, transparent); color: var(--amber); border-color: color-mix(in srgb, var(--amber-solid) 45%, transparent); }
+.badge-success { background: color-mix(in srgb, var(--green-solid) 16%, transparent); color: var(--green); border-color: color-mix(in srgb, var(--green-solid) 42%, transparent); }
+.badge-danger { background: color-mix(in srgb, var(--red-solid) 16%, transparent); color: var(--red); border-color: color-mix(in srgb, var(--red-solid) 42%, transparent); }
+
+/* empty states */
+#catalogue-empty, .catalogue-empty-static { color: var(--text-muted); font-size: 14px; padding: 18px 0; }
+
+/* footer */
+.page-foot { border-top: 1px solid var(--border); padding: 18px 28px; }
+.page-foot p { margin: 0 auto; max-width: 980px; }
+
+/* accessibility floor: every interactive element carries the 2px Signal
+   Blue focus ring */
+a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--blue-solid);
+  outline-offset: 2px;
+}
