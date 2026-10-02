@@ -283,7 +283,7 @@ def test_pure_predicates_stay_dom_free() -> None:
         "if (!Array.isArray(got) || got.length !== 0) "
         "{ console.error('predicate needs a DOM'); process.exit(1); }"
         "const slots = m.rowSlots(rows[0]);"
-        "if (slots.kind !== 'admitted-release') "
+        "if (slots.kind !== m.KIND_DISPLAY['admitted-release']) "
         "{ console.error('rowSlots kind projection broken'); process.exit(1); }"
         "console.log('OK');"
     )

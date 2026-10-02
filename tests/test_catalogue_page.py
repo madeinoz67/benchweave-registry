@@ -18,6 +18,8 @@ import hashlib
 import importlib.util
 import json
 import re
+import shutil
+import subprocess
 from collections.abc import Iterator
 from html.parser import HTMLParser
 from pathlib import Path
@@ -34,22 +36,39 @@ INDEX = REPO / "index.json"
 
 SHA = "0" * 39 + "1"  # invented 40-hex sha for render tests
 
-# CR-20's seven contract fields, as the card slots the renderer must carry
-# (rendered or explicitly "none" — the value arms are below).
-CONTRACT_SLOTS = (
+# The records-table row slots (the #224 follow-on's column set — the CR-20
+# field contract itself moves to the record page, whose arms live in
+# tests/test_catalogue_record.py). Rendered or explicitly none.
+ROW_SLOTS = (
     "display-name",
-    "summary",
+    "release-line",
     "publisher",
-    "licence",
-    "maintenance",
     "kind",
-    "release-id",
-    "version",
-    "digest",
+    "markers",
+    "signature",
+    "evidence",
+    "capabilities",
+    "maintenance",
+    "advisories",
     "compat",
-    "evidence-link",
-    "source-revision",
 )
+
+# The table's eight columns, in order (the mockup's set, §2.3).
+COLUMNS = (
+    "Signature",
+    "Release",
+    "Publisher",
+    "Evidence",
+    "Declared capabilities",
+    "Maintenance",
+    "Advisories",
+    "Compatibility",
+)
+
+# The Registry sub-brand mark's three stack-glyph bars, extracted from the
+# vendored styleguide's Sub-brands grid (§2.8: the fired posture's rects are
+# byte-matched against the vendored spec, never retyped).
+VENDORED_STYLEGUIDE = REPO / "vendored" / "gateway" / "public-site-styleguide.html"
 
 # The lede (B3', amended by the #224 follow-on §5): the mockup's wording —
 # pinned so a drift toward a service claim reddens. It makes no service claim.
@@ -82,8 +101,15 @@ def _template() -> str:
     return TEMPLATE.read_text(encoding="utf-8")
 
 
-def _render(index_bytes: bytes, sha: str = SHA) -> str:
-    return str(_module().render_page(index_bytes, _template(), sha))
+def _render(
+    index_bytes: bytes, sha: str = SHA, *, publisher_count: int = 0, registry_mark: bool = False
+) -> str:
+    return str(
+        _module().render_page(
+            index_bytes, _template(), sha,
+            publisher_count=publisher_count, registry_mark=registry_mark,
+        )
+    )
 
 
 def _cards(page: str) -> list[str]:
@@ -159,34 +185,45 @@ def _ancestor_classes(node: _Node) -> list[str]:
 
 
 def assert_dom_containment(html: str) -> None:
-    """Every data-bw-slot descends from its spec-card; every card is either
-    the hidden template shape or a package-identified row card; every card
-    carries its kind slot. Substring containment proves none of this — an
-    unclosed card opening tag leaves the slots parsed-but-orphaned."""
+    """Every data-bw-slot descends from its table row (``tr.bw-row``); every
+    row is either the hidden template shape or a package-identified row; every
+    row carries its kind slot inside the Release cell (§5's reshaped
+    containment arm — the unclosed-tag HIGH's standing guard, table form).
+    Substring containment proves none of this — an unclosed row opening tag
+    leaves the slots parsed-but-orphaned."""
     nodes = list(_walk(_parse(html)))
     slots = [n for n in nodes if "data-bw-slot" in n.attrs]
     assert slots, "precondition: the page carries slot elements"
     for slot in slots:
         classes = _ancestor_classes(slot)
-        assert any("spec-card" in c.split() for c in classes), (
+        assert any("bw-row" in c.split() for c in classes), (
             f"slot data-bw-slot={slot.attrs['data-bw-slot']!r} does not descend "
-            "from its spec-card (an unclosed card opening tag?)"
+            "from its tr.bw-row (an unclosed row opening tag?)"
         )
-    cards = [n for n in nodes if n.tag == "div" and "spec-card" in n.attrs.get("class", "").split()]
-    assert cards, "precondition: the page carries cards"
-    for card in cards:
-        in_template = any(
-            ancestor.tag == "template" for ancestor in _ancestors(card)
+    rows = [n for n in nodes if n.tag == "tr" and "bw-row" in n.attrs.get("class", "").split()]
+    assert rows, "precondition: the page carries rows"
+    for row in rows:
+        in_template = any(ancestor.tag == "template" for ancestor in _ancestors(row))
+        assert in_template or row.attrs.get("data-bw-package-id"), (
+            "a row carries neither the template shape nor a package id"
         )
-        assert in_template or card.attrs.get("data-bw-package-id"), (
-            "a card carries neither the template shape nor a package id"
+        release_cells = [
+            child
+            for child in _walk(row.children)
+            if child.tag == "td" and "td-release" in child.attrs.get("class", "").split()
+        ]
+        assert release_cells, (
+            f"row {row.attrs.get('data-bw-package-id', '(template)')} has no Release cell"
         )
         kinds = [
             child
-            for child in _walk(card.children)
+            for child in _walk(release_cells[0].children)
             if child.attrs.get("data-bw-slot") == "kind"
         ]
-        assert kinds, f"card {card.attrs.get('data-bw-package-id', '(template)')} has no kind slot"
+        assert kinds, (
+            f"row {row.attrs.get('data-bw-package-id', '(template)')} has no kind "
+            "badge inside its Release cell (CR-56)"
+        )
 
 
 def _ancestors(node: _Node) -> Iterator[_Node]:
@@ -197,8 +234,8 @@ def _ancestors(node: _Node) -> Iterator[_Node]:
 
 
 def test_dom_containment_on_the_fixture_page() -> None:
-    """The standing guard for the relocated renderer's HIGH: on the fixture
-    page (6 default cards + template), every slot sits inside its card."""
+    """The standing guard for the unclosed-tag HIGH: on the fixture page
+    (6 default rows + template), every slot sits inside its row."""
     assert_dom_containment(_render(FIXTURE.read_bytes()))
 
 
@@ -240,40 +277,98 @@ def test_default_page_excludes_non_default_kinds_and_unsigned() -> None:
         assert f'data-bw-package-id="{pid}"' not in page, f"non-default row rendered: {pid}"
 
 
-def test_static_cards_carry_the_contract_fields() -> None:
-    """CR-20's structural arm: every card carries the contract slots
-    (rendered or explicitly "none")."""
+def test_static_rows_carry_the_column_slots() -> None:
+    """The reshaped structural arm: every static row carries the column
+    slots (rendered or the table's explicit-none form)."""
     page = _render(FIXTURE.read_bytes())
     cards = _cards(page)
-    assert len(cards) == 6, f"the fixture's default view is 6 cards, got {len(cards)}"
+    assert len(cards) == 6, f"the fixture's default view is 6 rows, got {len(cards)}"
     for card in cards:
-        for slot in CONTRACT_SLOTS:
-            assert f'data-bw-slot="{slot}"' in card, f"card lacks contract slot {slot}"
+        for slot in ROW_SLOTS:
+            assert f'data-bw-slot="{slot}"' in card, f"row lacks column slot {slot}"
 
 
-def test_every_default_card_is_kind_tagged() -> None:
-    """CR-56's static half: a row never renders without its kind tag."""
+def test_the_table_carries_the_mockups_eight_columns() -> None:
+    """B-T's column arm: exactly the mockup's eight columns, in order."""
+    page = _render(FIXTURE.read_bytes())
+    head = page.split("<thead>", 1)[1].split("</thead>", 1)[0]
+    headers = re.findall(r"<th[^>]*>([^<]+)</th>", head)
+    assert tuple(headers) == COLUMNS, headers
+
+
+def test_every_default_row_is_kind_badged_in_the_release_cell() -> None:
+    """CR-56's static half, scoped (§5): a row never renders without its
+    kind badge — inside the Release cell, in the mockup's display case."""
     page = _render(FIXTURE.read_bytes())
     for card in _cards(page):
-        assert 'data-bw-slot="kind"' in card and "admitted-release" in card
+        release = card.split('class="td-release"', 1)[1]
+        assert 'data-bw-slot="kind"' in release and "Admitted release" in release
 
 
-def test_explicit_none_for_absent_evidence_and_advisories() -> None:
-    """CR-20's "or explicitly none"."""
+def test_every_static_row_is_signed_with_icon_and_text_and_title() -> None:
+    """B-T/B-I's static half: default rows are signed by definition — the
+    signature cell carries the Lucide signature icon, the visible text
+    'Signed', and the provenance title verbatim (never icon-only)."""
     page = _render(FIXTURE.read_bytes())
-    assert "no test evidence" in page
-    assert "no advisories" in page
+    for card in _cards(page):
+        sig = card.split('class="td-sig"', 1)[1].split("</td>", 1)[0]
+        assert "<svg" in sig, "a static row's signature cell lost its icon"
+        assert ">Signed<" in sig, "a static row's signature cell lost its visible text"
+        assert "Publisher signature valid against the key recorded for this publisher." in card
+        assert "sig-unsigned" not in card, (
+            "an unsigned cell rendered in the static default view (the legend's "
+            "'Unsigned' word is fine; the cell class is the discriminator)"
+        )
 
 
-def test_template_card_is_the_single_shape_source() -> None:
+def test_version_and_compatibility_stamp_statically_in_rows() -> None:
+    """B-T (mockup-driven): rows stamp version and compatibility as static
+    data (§2.3) — the release line carries package and version, the compat
+    cell carries the joined string; no hidden slot waits for JS."""
     page = _render(FIXTURE.read_bytes())
-    assert page.count("data-bw-template") == 1, "exactly one template card required"
+    assert "northwind-instruments/northwind-psu · 0.1.0" in page
+    assert ">OTDP 0.2.2 · adapter 1.1 · STG 1.4<" in page
+    assert 'data-bw-slot="compat" hidden' not in page
+
+
+def test_empty_evidence_renders_no_badge_and_advisories_none_renders_muted() -> None:
+    """§2.3's explicit-none split: the TABLE renders no badge for empty
+    evidence (the record page carries the explicit-none) and muted 'None'
+    for absent advisories."""
+    page = _render(FIXTURE.read_bytes())
+    # northwind-load carries no evidence and no advisories (card index 3:
+    # defaults sort daq, shunt, therm, load, psu, scope)
+    load = _cards(page)[3]
+    assert "northwind-load" in load
+    evidence = load.split('class="td-evidence"', 1)[1].split("</td>", 1)[0]
+    assert "badge" not in evidence, "empty evidence rendered a badge in the table"
+    advisories = load.split('class="td-adv"', 1)[1].split("</td>", 1)[0]
+    assert ">None<" in advisories
+    assert "text-muted" in advisories
+
+
+def test_capability_lines_and_none_declared() -> None:
+    """The capabilities cell: one icon+label line per TRUE capability; a row
+    with no true capability renders muted 'None declared'."""
+    page = _render(FIXTURE.read_bytes())
+    cards = _cards(page)
+    # northwind-psu: network_egress only
+    psu = next(card for card in cards if "northwind-psu" in card)
+    caps = psu.split('class="td-caps"', 1)[1].split("</td>", 1)[0]
+    assert "Network egress" in caps and "<svg" in caps
+    assert "Subprocess or native library" not in caps
+
+
+def test_template_row_is_the_single_shape_source() -> None:
+    page = _render(FIXTURE.read_bytes())
+    assert page.count("data-bw-template") == 1, "exactly one template row required"
 
 
 def test_empty_catalogue_renders_the_honest_empty_sentence() -> None:
     page = _render(b'{"index_version": 1, "rows": []}')
     assert "No published releases yet" in page
-    assert "data-bw-template" in page, "the template card survives the empty state"
+    assert 'class="bw-empty-row"' in page, "the honest empty renders as a table row"
+    assert "data-bw-template" in page, "the template row survives the empty state"
 
 
 def test_page_generation_is_deterministic() -> None:
@@ -397,23 +492,43 @@ def test_structural_braces_refusal_covers_the_template_chrome() -> None:
 
 
 def test_row_free_text_is_data_not_a_stamped_claim() -> None:
-    """The §4 row 8 narrowing, pinned: a summary (or display name, or
-    advisory id, or source revision) carrying a version substring is DATA —
-    the render succeeds and the string appears on the card. The relocated
-    gateway renderer refused this whole class (4/4 repros, whole-render
-    brick); this arm refuses to go back."""
+    """The §4 row 8 narrowing, pinned (records-table form): row data carrying
+    a version substring is DATA — the render succeeds and the string appears
+    in the row. The relocated gateway renderer refused this whole class (4/4
+    repros, whole-render brick); this arm refuses to go back."""
     row = {
         "kind": "admitted-release",
         "signature_state": "signed-valid",
         "package_id": "northwind-instruments/alpha-tool",
-        "display_name": "Northwind alpha",
+        "version": "1.4.2",
+        "display_name": "Northwind alpha (requires OTDP 0.2.2 host support)",
         "summary": "Requires OTDP 0.2.2 and STG 1.4 host support.",
         "advisories": ["BW-ADV-099"],
         "source_revision": "a" * 40,
     }
     page = _render(json.dumps({"index_version": 1, "rows": [row]}).encode())
-    assert "Requires OTDP 0.2.2" in page
-    assert "BW-ADV-099" in page
+    assert "Northwind alpha (requires OTDP 0.2.2 host support)" in page
+
+
+def test_row_version_and_compat_stamp_as_data() -> None:
+    """The §2.3 flip: statically stamped version/compat cells ride between
+    the markers as DATA — a row carrying three-component versions renders
+    (only the blank row chrome refuses literals)."""
+    row = {
+        "kind": "admitted-release",
+        "signature_state": "signed-valid",
+        "package_id": "northwind-instruments/alpha-tool",
+        "version": "1.4.2",
+        "display_name": "Northwind alpha",
+        "compatibility": {
+            "otdp_versions": ["0.2.2"],
+            "adapter_api_versions": ["1.1"],
+            "stg_versions": ["1.4"],
+        },
+    }
+    page = _render(json.dumps({"index_version": 1, "rows": [row]}).encode())
+    assert "northwind-instruments/alpha-tool · 1.4.2" in page
+    assert "OTDP 0.2.2 · adapter 1.1 · STG 1.4" in page
 
 
 def test_a_missing_marker_pair_refuses() -> None:
@@ -432,6 +547,55 @@ def test_marker_display_map_twins_agree() -> None:
     pattern = re.compile(r"'([a-z0-9-]+)':\s*'([^']*)'")
     js_map = dict(pattern.findall(js.split("MARKER_DISPLAY", 1)[1].split("}", 1)[0]))
     assert js_map == _module().MARKER_DISPLAY, (js_map, _module().MARKER_DISPLAY)
+
+
+def test_the_display_map_twins_agree() -> None:
+    """The records-table display maps (kind badge text, maintenance badge
+    text and tone) each have two carriers — the generator stamps the static
+    rows, the JS clones the rest; unequal twins render one row two ways."""
+    module = _module()
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    pattern = re.compile(r"'([a-z0-9_-]+)':\s*'([^']*)'")
+
+    def js_map(name: str) -> dict[str, str]:
+        chunk = js.split(f"var {name}", 1)[1]
+        return dict(pattern.findall(chunk.split("}", 1)[0]))
+
+    assert js_map("KIND_DISPLAY") == module.KIND_DISPLAY, (
+        js_map("KIND_DISPLAY"), module.KIND_DISPLAY,
+    )
+    assert js_map("MAINTENANCE_DISPLAY") == module.MAINTENANCE_DISPLAY
+    assert js_map("MAINTENANCE_BADGE") == module.MAINTENANCE_BADGE
+
+
+def test_detail_id_and_record_url_twins_agree() -> None:
+    """The detail-host id slug and the record-page URL have two carriers
+    (the generator stamps them on static rows; the JS sets them on clones) —
+    unequal twins send htmx to a target that does not exist."""
+    module = _module()
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    assert "replace(/[^A-Za-z0-9-]/g, '-')" in js, "the JS lost its slug rewrite"
+    node = shutil.which("node")
+    assert node is not None, "node missing — see test_node_is_present in the search suite"
+    script = (
+        "const m = require(process.argv[1]);"
+        "const row = {package_id: 'northwind-instruments/alpha-tool',"
+        " version: '1.4.2', registry_id: 'benchweave-registry'};"
+        "console.log(m.detailId(row) + ' ' + m.recordUrl(row));"
+    )
+    result = subprocess.run(
+        [node, "-e", script, str(PLUGINS_JS)],
+        capture_output=True, text=True, check=False, cwd=REPO,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    want_id = module.detail_id(
+        {"package_id": "northwind-instruments/alpha-tool", "version": "1.4.2"}
+    )
+    want = (
+        f"{want_id} "
+        "records/benchweave-registry/northwind-instruments/alpha-tool/1.4.2/index.html"
+    )
+    assert result.stdout.strip() == want, (result.stdout, want)
 
 
 def test_truncate_at_twins_agree() -> None:
@@ -573,35 +737,29 @@ def test_the_committed_template_its_index_and_the_page_agree() -> None:
         assert f'data-bw-package-id="{row["package_id"]}"' in page
 
 
-# ── fold R7/R10 (2026-10-02 round-2 refute) ───────────────────────────────────
+# ── fold R7/R10 (2026-10-02 round-2 refute; records-table follow-on) ──────────
 
 
-def test_card_release_links_pin_to_the_stamped_commit() -> None:
-    """R7 (critic F6): every card's release link points at the STAMPED
-    commit's tree, not `main` — the page's click-through must show the exact
-    bytes the page was generated from, matching its verifiability contract
-    (the footer says `generated from <sha>`; the links must not quietly
-    drift to whatever main holds today). The template's header nav link is
-    a browse link and stays on main by design."""
+def test_row_drill_anchors_point_at_relative_record_urls() -> None:
+    """R7/R10 (records-table form): the row's drill anchor is a RELATIVE
+    record-page URL (R10 — the page serves from a Pages subroot); the
+    stamped-commit pinning moves to the record pages' own links, whose arms
+    live in tests/test_catalogue_record.py. With htmx loaded the anchor also
+    carries the drill wiring; without JS it is a plain link."""
     page = _render(FIXTURE.read_bytes())
     cards = _cards(page)
-    assert cards, "precondition: default cards render"
+    assert cards, "precondition: default rows render"
     for card in cards:
-        href = re.search(r'data-bw-slot="evidence-link"\s+href="([^"]+)"', card)
-        assert href is not None, "a card carries no evidence link"
-        assert href.group(1).startswith(
-            f"https://github.com/madeinoz67/benchweave-registry/tree/{SHA}/releases/"
-        ), f"card link is not stamped-commit-pinned: {href.group(1)}"
-    # the JS twin builds the same pinned shape (ref read from the page's own
-    # stamp at runtime; 'main' remains only as the no-JS fallback)
-    js = PLUGINS_JS.read_text(encoding="utf-8")
-    assert "function releaseDirUrl(row, ref)" in js, (
-        "plugins.js releaseDirUrl lost its ref parameter"
-    )
-    assert "data-bw-stamp" in js, "the wiring no longer reads the page's stamp"
-    assert "'https://github.com/madeinoz67/benchweave-registry/tree/' + (ref" in js or (
-        "tree/' + (ref" in js
-    ), "the JS URL base no longer carries the ref"
+        anchor = re.search(r'<a class="release-name"[^>]*href="([^"]+)"', card)
+        assert anchor is not None, "a row carries no drill anchor"
+        url = anchor.group(1)
+        assert url.startswith("records/benchweave-registry/"), (
+            f"the drill anchor is not a relative record URL: {url}"
+        )
+        assert url.endswith("/index.html"), url
+        assert 'hx-select="#release-detail"' in card and "hx-push-url" in card
+        slug = re.search(r'hx-target="#(bw-detail-[a-z0-9-]+)"', card)
+        assert slug is not None, "the row carries no detail-host target"
 
 
 def test_no_root_absolute_urls_in_the_template_or_wiring() -> None:
@@ -616,3 +774,112 @@ def test_no_root_absolute_urls_in_the_template_or_wiring() -> None:
     ):
         for literal in ('src="/', 'href="/', "fetch('/", 'fetch("/'):
             assert literal not in text, f"{name} carries the root-absolute form {literal!r}"
+
+
+# ── page chrome: snapshot line, nav placeholders, theme switcher, htmx ────────
+
+
+def test_the_snapshot_line_carries_stamp_counts_and_publishers() -> None:
+    """§2.1: `snapshot <sha12>` (the stamp, short), `N shown of M` (the
+    default counts, statically; JS updates `shown` on filter), `P vetted`
+    (len(publishers)) — honest '0 vetted' on an empty registry."""
+    page = _render(FIXTURE.read_bytes(), publisher_count=2)
+    assert "<dt>snapshot</dt>" in page and f"<dd class=\"mono\">{SHA[:12]}</dd>" in page
+    assert 'data-bw-shown="6"' in page and ">6</span> shown of 11<" in page
+    assert "2 vetted" in page
+    bare = _render(FIXTURE.read_bytes())
+    assert "0 vetted" in bare, "the honest zero-publisher registry must render 0 vetted"
+
+
+def test_nav_placeholders_are_marked_non_links() -> None:
+    """§2.1: Publishers and Advisories are slice-4 surfaces and the
+    publication prose is maintainer-facing today — they render as muted
+    NON-LINKS (no href a static page cannot honor), aria-disabled, naming
+    the future surface; Catalogue is the only live link."""
+    template = _template()
+    catalogue = re.search(r"<nav[^>]*>(.*?)</nav>", template, re.DOTALL)
+    assert catalogue is not None, "the template lost its nav"
+    nav = catalogue.group(1)
+    assert 'href="#catalogue" aria-current="page"' in nav
+    for label in ("Publishers", "Advisories", "How publication works"):
+        entry = re.search(rf'<span class="nav-future"[^>]*>{label}</span>', nav)
+        assert entry is not None, f"{label} is not a marked non-link"
+        assert "href" not in entry.group(0), f"{label} carries an href"
+        assert 'aria-disabled="true"' in entry.group(0), f"{label} is not aria-disabled"
+        assert 'title="' in entry.group(0), f"{label} names no future surface"
+
+
+def test_the_theme_switcher_button_and_toggle_wiring_exist() -> None:
+    """§2.1: the header carries the switcher button (aria-labelled) and the
+    wiring toggles data-theme on the html element, persisted in localStorage
+    (the icon is the circle-free sun rewrite — see the honesty arms)."""
+    template = _template()
+    assert 'id="bw-theme-toggle"' in template and 'aria-label="Switch colour theme"' in template
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    assert "data-theme" in js and "localStorage" in js and "bw-theme" in js
+
+
+def test_htmx_is_served_same_origin_before_the_wiring_with_no_cdn() -> None:
+    """§2.5/B-S: the vendored htmx loads same-origin (assets/htmx.min.js),
+    BEFORE plugins.js; neither the template nor the wiring references any
+    CDN (the vendor is digest-pinned — tests/test_htmx_vendor.py)."""
+    template = _template()
+    htmx_at = template.find('src="assets/htmx.min.js"')
+    js_at = template.find('src="assets/plugins.js"')
+    assert htmx_at != -1 and js_at != -1 and htmx_at < js_at, (
+        "the template must load assets/htmx.min.js before assets/plugins.js"
+    )
+    for name, text in (
+        ("catalogue/index.template.html", template),
+        ("catalogue/assets/plugins.js", PLUGINS_JS.read_text(encoding="utf-8")),
+    ):
+        for host in ("unpkg.com", "cdn.jsdelivr", "cdnjs.cloudflare", "esm.sh"):
+            assert host not in text, f"{name} references the CDN host {host}"
+
+
+# ── the mark, both postures (§2.8 — ships DARK behind --registry-mark) ───────
+
+WORDMARK_BEGIN_MARKER = "<!-- bw:wordmark begin -->"
+WORDMARK_END_MARKER = "<!-- bw:wordmark end -->"
+
+
+def _vendored_mark_rects() -> list[str]:
+    guide = VENDORED_STYLEGUIDE.read_text(encoding="utf-8")
+    return re.findall(r'<rect [^>]*rx="0.85"[^>]*/>', guide)
+
+
+def test_the_unfired_posture_ships_no_mark_shapes() -> None:
+    """§2.8's unfired arm: the default render carries zero <rect> (no
+    stack-glyph bars), zero <circle>, and no Registry pill — the mark ships
+    dark pending the owner's word."""
+    page = _render(FIXTURE.read_bytes())
+    assert page.count("<rect") == 0, "the unfired render carries a stack-glyph shape"
+    assert "<circle" not in page, "a circle-bearing glyph rendered"
+    assert "mark-pill" not in page, "the Registry pill rendered unfired"
+    assert ">Registry<" not in page, "a Registry wordmark label rendered unfired"
+
+
+def test_the_fired_posture_pins_the_three_spec_rects_byte_exactly() -> None:
+    """§2.8's fired arm: --registry-mark renders the Registry variant —
+    exactly the vendored spec's three stack-glyph bars (byte-matched, never
+    retyped), inside the single header wordmark block, with the pill; the
+    circle ban still holds (the Standards tag glyph stays gated)."""
+    spec_rects = _vendored_mark_rects()
+    assert len(spec_rects) == 3, (
+        f"the vendored styleguide's Sub-brands grid carries {len(spec_rects)} "
+        "stack-glyph bars — the fired arm's spec moved; re-derive"
+    )
+    page = _render(FIXTURE.read_bytes(), registry_mark=True)
+    assert page.count("<rect") == 3, (
+        f"the fired render carries {page.count('<rect')} rect(s), expected exactly 3"
+    )
+    for rect in spec_rects:
+        assert rect in page, f"a spec bar is absent or retyped: {rect}"
+    assert ">Registry<" in page, "the fired wordmark lost its Registry pill"
+    assert "<circle" not in page, "the fired posture still bans the tag-glyph circle"
+    # all three bars sit inside the single header wordmark block
+    wordmark = page.split(WORDMARK_BEGIN_MARKER, 1)[1].split(WORDMARK_END_MARKER, 1)[0]
+    for rect in spec_rects:
+        assert rect in wordmark, "a spec bar rendered outside the wordmark block"
+    # the gateway weave is GONE in the fired variant (the mark replaces it)
+    assert "L17 7 L7 17" not in wordmark, "the fired wordmark kept the gateway weave"
