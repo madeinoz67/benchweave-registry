@@ -153,14 +153,39 @@ def validate_tree(root: Path) -> list[str]:
     # CR-35's releases half: no dev-prefixed origin or dependency lineage in
     # the published tree (the docstring's records-AND-releases claim, made
     # true here): a dev-unsigned origin under releases/ refuses.
+    import re as _re
+
+    _segment = _re.compile(r"^[a-z0-9][a-z0-9._-]*$")
     for manifest_path in sorted(manifests.values()):
         manifest = json.loads(manifest_path.read_bytes())
         rel = manifest_path.relative_to(releases_dir).as_posix()
+        # Fold L2 (read side): a traversal-shaped identity never resolves.
+        parts = manifest_path.relative_to(releases_dir).parts
+        for part in parts[:-1]:
+            if _segment.fullmatch(part) is None:
+                findings.append(f"release_path_unsafe:{rel}")
+        # Fold M3 (identity agreement): the manifest must claim the path it
+        # lives at - a ghost at 0.9.0 claiming 0.1.0 refuses here too.
+        path_package = f"{parts[1]}/{parts[2]}"
+        if manifest.get("package_id") != path_package or manifest.get("version") != parts[3]:
+            findings.append(
+                f"release_identity_mismatch:{rel}: claims "
+                f"{manifest.get('package_id')}@{manifest.get('version')}"
+            )
         if str(manifest.get("registry_id", "")).startswith("dev-"):
             findings.append(f"dev_lineage_in_release:{rel}")
         for dep in manifest.get("dependencies", []):
             if str(dep.get("registry_id", "")).startswith("dev-"):
                 findings.append(f"dev_lineage_in_release:{rel}")
+        # Fold H2: the consumed manifest is reconciled against the signed
+        # bytes and the recorded digest - a post-recording tamper refuses.
+        submission_path = manifest_path.parent / "submission-manifest.json"
+        if submission_path.is_file():
+            signed = json.loads(submission_path.read_bytes())
+            reconciled = {k: v for k, v in manifest.items() if k != "review"}
+            reconciled["manifest_version"] = signed.get("manifest_version", "0.1.1")
+            if reconciled != signed:
+                findings.append(f"manifest_reconciliation_failed:{rel}")
 
     for path, parsed in parsed_by_path.items():
         # CR-35's index half: no dev-prefixed registry id in any record.
@@ -184,6 +209,15 @@ def validate_tree(root: Path) -> list[str]:
             )
             continue
         manifest = json.loads(release_path.read_bytes())
+        # Fold H2: the publish record's release_manifest_sha256 must pin the
+        # manifest bytes actually on disk.
+        recorded_digest = lifecycle.get("release_manifest_sha256")
+        if recorded_digest and recorded_digest != sha256_hex(release_path.read_bytes()):
+            findings.append(
+                f"release_digest_mismatch:{path.name}: record pins "
+                f"{recorded_digest[:12]}…, on disk is "
+                f"{sha256_hex(release_path.read_bytes())[:12]}…"
+            )
         # CR-38: the sign-off names the closure digest actually published.
         expected = closure_digest_of_dependencies(manifest.get("dependencies", []))
         if lifecycle.get("closure_digest") != expected:

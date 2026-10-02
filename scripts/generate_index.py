@@ -79,6 +79,8 @@ def generate(root: Path) -> bytes:
     reviews = _reviews(root)
     publishes = _publish_records(root)
     rows: list[dict[str, Any]] = []
+    problems: list[str] = []
+    seen_rows: set[tuple[str, str, str]] = set()
     releases = root / "releases"
     if releases.is_dir():
         for manifest_path in sorted(releases.rglob("manifest.json")):
@@ -87,6 +89,33 @@ def generate(root: Path) -> bytes:
                 continue
             _registry_id, publisher, plugin, version, _name = parts
             manifest = json.loads(manifest_path.read_bytes())
+            # Fold M3: identity comes from the PATH and the manifest must
+            # agree; duplicate identities refuse.
+            row_key = (publisher, plugin, version)
+            if row_key in seen_rows:
+                problems.append(f"index_duplicate_row:{'/'.join(row_key)}")
+                continue
+            seen_rows.add(row_key)
+            if manifest.get("package_id") != f"{publisher}/{plugin}" or manifest.get(
+                "version"
+            ) != version:
+                problems.append(
+                    f"index_identity_mismatch:{publisher}/{plugin}/{version}: claims "
+                    f"{manifest.get('package_id')}@{manifest.get('version')}"
+                )
+                continue
+            # Fold H2: the index never serves tampered bytes under a
+            # signed-valid label - reconcile against the signed submission.
+            _signed_path = manifest_path.parent / "submission-manifest.json"
+            if _signed_path.is_file():
+                _signed = json.loads(_signed_path.read_bytes())
+                _reconciled = {k: v for k, v in manifest.items() if k != "review"}
+                _reconciled["manifest_version"] = _signed.get("manifest_version", "0.1.1")
+                if _reconciled != _signed:
+                    problems.append(
+                        f"manifest_reconciliation_failed:{publisher}/{plugin}/{version}"
+                    )
+                    continue
             release_dir = manifest_path.parent
             status: dict[str, Any] = {}
             review_record = reviews.get((publisher, plugin, version), {})
@@ -152,6 +181,10 @@ def generate(root: Path) -> bytes:
                     "unverified_markers": list(_UNVERIFIED_MARKERS),
                 }
             )
+    if problems:
+        for problem in problems:
+            print(f"generate_index: {problem}", file=sys.stderr)
+        raise SystemExit(1)
     index = {
         "index_version": 1,
         "generated_from": {"records_tree": "records/", "releases_tree": "releases/"},

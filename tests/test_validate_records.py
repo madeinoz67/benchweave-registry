@@ -169,7 +169,11 @@ def _mini_release(
 ) -> Path:
     release_dir = root / "releases" / "benchweave-registry" / "madeinoz67" / "dps150" / "0.1.0"
     release_dir.mkdir(parents=True, exist_ok=True)
-    manifest: dict[str, object] = {"dependencies": dependencies}
+    manifest: dict[str, object] = {
+        "package_id": "madeinoz67/dps150",
+        "version": "0.1.0",
+        "dependencies": dependencies,
+    }
     if review_block is not None:
         manifest["review"] = review_block
     path = release_dir / "manifest.json"
@@ -191,9 +195,6 @@ def _consistent_release(root: Path, dependencies: list[dict[str, Any]]) -> tuple
     lifecycle = publish["lifecycle"]
     assert isinstance(lifecycle, dict)
     lifecycle["closure_digest"] = digest
-    publish_path = root / "records" / "lifecycle" / "madeinoz67" / "dps150" / "0.1.0"
-    publish_path.mkdir(parents=True, exist_ok=True)
-    (publish_path / "1-publish.json").write_bytes(vr.canonical_bytes(publish))
     review_raw = (
         root / "records" / "submissions" / "madeinoz67" / "dps150" / "0.1.0" / "review-1.json"
     ).read_bytes()
@@ -202,6 +203,12 @@ def _consistent_release(root: Path, dependencies: list[dict[str, Any]]) -> tuple
         dependencies,
         {"record_sha256": vr.sha256_hex(review_raw), "outcome": "accepted"},
     )
+    publish_path = root / "records" / "lifecycle" / "madeinoz67" / "dps150" / "0.1.0"
+    publish_path.mkdir(parents=True, exist_ok=True)
+    publish["lifecycle"]["release_manifest_sha256"] = vr.sha256_hex(
+        manifest_path.read_bytes()
+    )
+    (publish_path / "1-publish.json").write_bytes(vr.canonical_bytes(publish))
     return manifest_path, publish_path
 
 
@@ -331,4 +338,133 @@ def test_publish_record_records_firmware_attestation() -> None:
         "files": ["firmware/blob.bin"],
     }
     assert findings_for(record) == []
+
+# --- fold H2/M3/L2: reconciliation, path identity, traversal (2026-10-02) -------
+
+
+def _sandbox_repo(tmp_path: Path) -> Path:
+    import shutil
+
+    sandbox = tmp_path / "repo"
+    shutil.copytree(
+        Path(__file__).resolve().parents[1],
+        sandbox,
+        ignore=shutil.ignore_patterns("venv", ".git", "__pycache__", ".wt"),
+    )
+    return sandbox
+
+
+RELEASE = "releases/benchweave-registry/madeinoz67/dps150/0.1.0"
+
+
+def test_post_recording_manifest_tamper_refuses(tmp_path: Path) -> None:
+    """H2: permissions/transports changed in manifest.json after recording."""
+    sandbox = _sandbox_repo(tmp_path)
+    mpath = sandbox / RELEASE / "manifest.json"
+    manifest = json.loads(mpath.read_bytes())
+    manifest["permissions"] = ["network_egress"]
+    manifest["device_targets"][0]["transports"] = ["tcp"]
+    mpath.write_bytes(vr.canonical_bytes(manifest))
+    findings = vr.validate_tree(sandbox)
+    assert any(f.startswith("manifest_reconciliation_failed:") for f in findings), findings
+
+
+def test_release_digest_pin_mismatch_refuses(tmp_path: Path) -> None:
+    """H2: the publish record's release_manifest_sha256 pins the on-disk bytes."""
+    sandbox = _sandbox_repo(tmp_path)
+    mpath = sandbox / RELEASE / "manifest.json"
+    manifest = json.loads(mpath.read_bytes())
+    manifest["summary"] = "tampered summary"
+    mpath.write_bytes(vr.canonical_bytes(manifest))
+    findings = vr.validate_tree(sandbox)
+    assert any(f.startswith("release_digest_mismatch:") for f in findings), findings
+
+
+def test_tampered_manifest_refuses_index_generation(tmp_path: Path) -> None:
+    """H2: the index never serves tampered bytes under a signed-valid label."""
+    import subprocess
+    import sys as _sys
+
+    sandbox = _sandbox_repo(tmp_path)
+    mpath = sandbox / RELEASE / "manifest.json"
+    manifest = json.loads(mpath.read_bytes())
+    manifest["permissions"] = ["network_egress"]
+    mpath.write_bytes(vr.canonical_bytes(manifest))
+    result = subprocess.run(
+        [_sys.executable, str(sandbox / "scripts" / "generate_index.py"),
+         "--root", str(sandbox)],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 1
+    assert "manifest_reconciliation_failed" in result.stderr
+
+
+def test_ghost_release_claiming_another_version_refuses(tmp_path: Path) -> None:
+    """M3: identity comes from the path; a ghost at 0.9.0 claiming 0.1.0
+    refuses (validate AND index)."""
+    import subprocess
+    import sys as _sys
+
+    sandbox = _sandbox_repo(tmp_path)
+    ghost = sandbox / "releases/benchweave-registry/madeinoz67/dps150/0.9.0"
+    ghost.mkdir(parents=True)
+    real = json.loads((sandbox / RELEASE / "manifest.json").read_bytes())
+    real.pop("review", None)
+    for name in ("submission-manifest.json", "payload.zip", "manifest.sig"):
+        source = sandbox / RELEASE / name
+        if source.is_file():
+            (ghost / name).write_bytes(source.read_bytes())
+    (ghost / "manifest.json").write_bytes(vr.canonical_bytes(real))
+    findings = vr.validate_tree(sandbox)
+    assert any(f.startswith("release_identity_mismatch:") for f in findings), findings
+    result = subprocess.run(
+        [_sys.executable, str(sandbox / "scripts" / "generate_index.py"),
+         "--root", str(sandbox)],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 1
+    assert "index_identity_mismatch" in result.stderr
+
+
+def test_duplicate_release_rows_refuse(tmp_path: Path) -> None:
+    """M3: the same identity at two paths cannot both serve rows."""
+    import subprocess
+    import sys as _sys
+
+    sandbox = _sandbox_repo(tmp_path)
+    twin = sandbox / "releases/benchweave-registry/madeinoz67/dps150/0.1.0-copy"
+    twin.mkdir(parents=True)
+    for name in ("manifest.json", "submission-manifest.json", "payload.zip"):
+        source = sandbox / RELEASE / name
+        if source.is_file():
+            (twin / name).write_bytes(source.read_bytes())
+    # A twin whose manifest agrees with its own path is impossible without
+    # changing the version; the copy carries 0.1.0 at a 0.1.0-copy path ->
+    # identity mismatch fires first. For the pure duplicate arm, copy the
+    # whole 0.1.0 dir under a second registry id instead.
+    twin2 = sandbox / "releases/mirror-registry/madeinoz67/dps150/0.1.0"
+    twin2.mkdir(parents=True)
+    for name in ("manifest.json", "submission-manifest.json", "payload.zip"):
+        source = sandbox / RELEASE / name
+        if source.is_file():
+            (twin2 / name).write_bytes(source.read_bytes())
+    result = subprocess.run(
+        [_sys.executable, str(sandbox / "scripts" / "generate_index.py"),
+         "--root", str(sandbox)],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 1
+    assert "index_duplicate_row" in result.stderr
+
+
+def test_traversal_shaped_release_dir_refuses(tmp_path: Path) -> None:
+    """L2 read side: a traversal-shaped directory under releases/ refuses."""
+    sandbox = _sandbox_repo(tmp_path)
+    # rglob never yields a path with .. in parts (it resolves), so the honest
+    # arm is a directory whose NAME fails the segment shape.
+    evil = sandbox / "releases/benchweave-registry/BAD..SEG/x/1.0.0"
+    evil.mkdir(parents=True)
+    (evil / "manifest.json").write_bytes(b"{}")
+    findings = vr.validate_tree(sandbox)
+    assert any(f.startswith("release_path_unsafe:") for f in findings), findings
 
