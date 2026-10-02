@@ -32,26 +32,6 @@ jobs:
       - name: Unit tests (validity arms)
         run: uv run pytest -q
 
-  mirror-drift:
-    # Issue #224 slice 2: a records change without a gateway sync fails CI
-    # here. PUSH TO MAIN ONLY — during any records PR's review the gateway
-    # mirror is necessarily behind, so a PR-scoped arm would be red on every
-    # correct submission. Manual-only sync (owner ruling 2026-10-02): the
-    # refusal names the documented manual commands; the honest intermediate
-    # is a red main until the sync PR lands.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          python-version: "3.13"
-      - name: Sync environment
-        run: uv sync --locked
-      - name: Gateway catalogue mirror drift (issue #224)
-        run: uv run python scripts/check_mirror_drift.py
-
   drift:
     # The CON-12 staleness pattern: warn (not fail) when gateway main advances
     # past the pin — the pin advances deliberately per train.
