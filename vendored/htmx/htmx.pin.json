@@ -1,0 +1,10 @@
+{
+  "comment": "Digest pin for the vendored htmx enhancement library (issue #224 follow-on design record §2.5: the drill-down's enhancement layer, fetched once, verified, served same-origin as assets/htmx.min.js — no CDN, no runtime fetch). License deviation note: the design record named 'BSD-2-Clause'; the fetched package's own LICENSE file is Zero-Clause BSD (0BSD), and THAT text is pinned verbatim here — the artifact is the authority.",
+  "source": "https://unpkg.com/htmx.org@2.0.11/dist/htmx.min.js",
+  "version": "2.0.11",
+  "sha256": "d6fdc75f204e6bdefa99b69bf1e6d4ac69b8a364f77929f45c13476b4000f717",
+  "size": 52182,
+  "license": "Zero-Clause BSD\n=============\n\nPermission to use, copy, modify, and/or distribute this software for\nany purpose with or without fee is hereby granted.\n\nTHE SOFTWARE IS PROVIDED “AS IS” AND THE AUTHOR DISCLAIMS ALL\nWARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES\nOF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE\nFOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY\nDAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN\nAN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT\nOF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n",
+  "vendored_path": "vendored/htmx/htmx.min.js",
+  "pinned_date": "2026-10-02"
+}

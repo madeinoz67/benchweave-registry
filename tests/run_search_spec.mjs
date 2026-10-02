@@ -43,20 +43,23 @@ for (const testCase of table.cases) {
   }
 }
 
-// CR-56: every row's rendered kind tag equals the machine kind — the tag
-// is the row's identity in any view (never rendered without it).
+// CR-56: every row's rendered kind badge equals the DISPLAY MAP's rendering
+// of the machine kind (the map is the single translation; a row never
+// renders without its badge).
 for (const row of rows) {
   const slots = plugins.rowSlots(row);
-  if (slots.kind !== row.kind) {
+  if (slots.kind !== plugins.KIND_DISPLAY[row.kind]) {
     failures += 1;
-    console.error(`FAIL kind-tag ${row.package_id}: '${slots.kind}' != '${row.kind}'`);
+    console.error(
+      `FAIL kind-tag ${row.package_id}: '${slots.kind}' != '${plugins.KIND_DISPLAY[row.kind]}'`,
+    );
   }
 }
 
 // CR-37: known markers render via the display map; an unknown marker id
 // renders VERBATIM (forward-honest, never dropped).
 const shared = rows.find((row) => row.package_id === 'harborline-systems/harborline-relay16');
-const sharedMarkers = plugins.rowSlots(shared).markers.map((entry) => entry.text);
+const sharedMarkers = plugins.rowSlots(shared).markers;
 if (!sharedMarkers.includes('conformance evidence self-attested')) {
   failures += 1;
   console.error('FAIL marker-map: known marker did not render via the display map');
@@ -66,17 +69,16 @@ if (!sharedMarkers.includes('community-shared-not-vetted')) {
   console.error('FAIL marker-map: unknown marker id was not rendered verbatim');
 }
 
-// CR-20's "or explicitly none" on the clone projection: a row with empty
-// evidence carries the explicit-none text in its slot projection.
+// The records table renders no badge for empty evidence (the record page
+// carries the explicit-none) — the projection must carry an empty list.
 const noEvidence = rows.find((row) => row.package_id === 'northwind-instruments/northwind-load');
-const noEvidenceSlots = plugins.rowSlots(noEvidence);
-if (noEvidenceSlots['evidence-none'] !== 'no test evidence' || noEvidenceSlots.evidence.length) {
+if (plugins.rowSlots(noEvidence).evidence.length) {
   failures += 1;
-  console.error('FAIL evidence-none: the empty-evidence projection is not explicit-none');
+  console.error('FAIL evidence-empty: the empty-evidence projection is not empty');
 }
 
 if (failures) {
   console.error(`${failures} failure(s) over ${ran} truth-table case(s)`);
   process.exit(1);
 }
-console.log(`OK ${ran} truth-table case(s) + kind-tag + marker + evidence-none arms`);
+console.log(`OK ${ran} truth-table case(s) + kind-tag + marker + evidence-empty arms`);

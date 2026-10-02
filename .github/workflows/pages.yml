@@ -54,7 +54,7 @@ jobs:
       - name: Index regeneration check (CR-21)
         run: uv run python scripts/generate_index.py --check
       - name: Unit tests (catalogue + validity arms)
-        run: uv run pytest -q
+        run: uv run pytest -q -m "not browser"
 
   deploy:
     needs: validity
@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           uv run python scripts/generate_index.py
-          uv run python scripts/generate_catalogue_page.py --dest _site --sha "${GITHUB_SHA}"
+          uv run python scripts/generate_catalogue_page.py --dest _site --sha "${GITHUB_SHA}" --registry-mark
       - name: Browser verification of the generated artifact (B4')
         run: |
           set -euo pipefail

@@ -13,6 +13,7 @@ recorded act (the pin record), never a silent drift.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -21,9 +22,9 @@ STYLEGUIDE = REPO / "vendored" / "gateway" / "public-site-styleguide.html"
 STYLEGUIDE_PIN = REPO / "vendored" / "gateway" / "public-site-styleguide.pin.json"
 PAGE_CSS = REPO / "catalogue" / "assets" / "catalogue.css"
 
-#: The vendored bytes' origin (the slice-2 branch tip that carries the two
-#: declared component shapes; main's copy predates them).
-ORIGIN = "madeinoz67/benchweave@635e5b9:docs/internal/public-site-styleguide.html"
+#: The vendored bytes' origin (gateway PR #350's tip: the authored CSS declarations
+#: + the Registry sub-brand firing; durable as a main commit once #350 merges).
+ORIGIN = "madeinoz67/benchweave@ba42dd0:docs/internal/public-site-styleguide.html"
 
 _VAR_REF = re.compile(r"var\(\s*(--[a-z0-9-]+)")
 _TOKEN_DECL = re.compile(r"^\s{2,}(--[a-z0-9-]+)\s*:\s*([^;]+);", re.MULTILINE)
@@ -58,15 +59,37 @@ def test_the_vendored_styleguide_is_digest_pinned_to_its_origin() -> None:
         f"the vendored styleguide drifted from its pin (on-disk {digest}, "
         f"pinned {pin['sha256']}) — repin deliberately or restore"
     )
+    # A recorded divergence (registry-authored sections pending gateway
+    # adoption) must name its sections and convergence path — the #224
+    # follow-on form; an UNRECORDED divergence still reddens above.
+    if "divergence" in pin:
+        assert pin["divergence"]["sections"], "a recorded divergence names no sections"
+        assert pin["divergence"]["converges"], "a recorded divergence names no convergence path"
 
 
-def test_the_vendored_copy_declares_the_two_catalogue_component_shapes() -> None:
-    """§4.9: the two declared shapes (filter bar, catalogue meta line) are
-    declared IN the vendored copy — the c90f9f3 amendments, which main's
-    styleguide predates."""
+def test_the_vendored_copy_declares_the_catalogue_component_shapes() -> None:
+    """§4.9 + the #224 follow-on (§7): the declared shapes (filter bar,
+    catalogue meta line, records table, record page) are declared IN the
+    vendored copy — as AUTHORED bytes since the gateway's adoption (PR
+    #346) and the 2026-10-03 convergence re-copy; the interim
+    registry-authored divergence is closed."""
     html = STYLEGUIDE.read_text(encoding="utf-8")
-    assert "Filter bar" in html and "filter-bar" in _style_block(html)
-    assert "Catalogue meta line" in html and "catalogue-meta" in _style_block(html)
+    block = _style_block(html)
+    assert "Filter bar" in html and "filter-bar" in block
+    assert "Catalogue meta line" in html and "catalogue-meta" in block
+    assert "Records table" in html and "bw-records" in block, (
+        "the records-table component declaration is missing"
+    )
+    assert "Record page" in html and "record-grid" in block, (
+        "the record-page component declaration is missing"
+    )
+    pin = json.loads(STYLEGUIDE_PIN.read_text(encoding="utf-8"))
+    assert "divergence" not in pin, (
+        "the divergence is converged: the pin record carries no divergence "
+        "block and the vendor is digest-pinned to the authored authority "
+        "(authored wording — including its adoption-note comment — rides the "
+        "verbatim copy by design)"
+    )
 
 
 def test_the_page_css_token_block_is_the_styleguide_block_verbatim() -> None:

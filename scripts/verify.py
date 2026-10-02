@@ -71,6 +71,27 @@ def _lifecycle_events(root: Path) -> dict[tuple[str, str, str], list[dict[str, s
             }
         )
     return events
+def release_signature_verifies(
+    root: Path, publisher_id: str, release_dir: Path
+) -> bool:
+    """The exact check ``verify_releases`` performs per signed release: the
+    publisher's RECORDED key over ``manifest.sig`` verifying
+    ``submission-manifest.json``. The catalogue page generator reuses THIS
+    check at generation time (issue #224 follow-on §2.7) so a rendered
+    "Valid against the recorded ed25519 key" claim is proven, never
+    decorative — one authority, two callers."""
+    key = _publisher_keys(root).get(publisher_id)
+    if key is None:
+        return False
+    sig_path = release_dir / "manifest.sig"
+    signed_path = release_dir / "submission-manifest.json"
+    if not sig_path.is_file() or not signed_path.is_file():
+        return False
+    try:
+        key.verify(sig_path.read_bytes(), signed_path.read_bytes())
+    except InvalidSignature:
+        return False
+    return True
 
 
 def verify_releases(root: Path) -> tuple[list[str], list[dict[str, Any]]]:

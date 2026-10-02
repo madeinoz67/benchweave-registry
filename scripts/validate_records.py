@@ -7,6 +7,8 @@ separators, one trailing newline), schema-valid against
 - a changes-requested review citing no failure is refused (CR-10);
 - a review naming no platform findings at the pinned revision is refused (CR-60);
 - a record without a kind tag is refused (CR-56);
+- a publishers.json carrying one publisher_id twice is refused — every
+  consumer of the join silently kept the last entry (fold F6);
 - a publish record without a closure diff, or whose sign-off names a different
   closure digest than the one published, is refused (CR-38);
 - no dev-prefixed registry id appears anywhere in the records or the published
@@ -501,6 +503,26 @@ def validate_tree(root: Path) -> list[str]:
                 f"record_schema_invalid:publishers.json: {err.json_path}: {err.message}"
             )
         publishers_doc = parsed if isinstance(parsed, dict) else None
+        # Fold F6 (lane A F4, 2026-10-02): a publisher_id appearing twice
+        # keyed every downstream consumer (the page generator's join,
+        # verify's key map) to silently keep the LAST entry — the validity
+        # gate refuses the duplicate, naming the id. The schema cannot
+        # express uniqueness (draft 2020-12 uniqueItems is whole-object).
+        entries = parsed.get("publishers") if isinstance(parsed, dict) else None
+        if isinstance(entries, list):
+            seen_publisher_ids: set[str] = set()
+            for entry in entries:
+                publisher_id = (
+                    entry.get("publisher_id") if isinstance(entry, dict) else None
+                )
+                if publisher_id is None:
+                    continue  # requiredness is the schema's own refusal
+                if publisher_id in seen_publisher_ids:
+                    findings.append(
+                        f"publisher_id_duplicate:publishers.json:{publisher_id}"
+                    )
+                else:
+                    seen_publisher_ids.add(str(publisher_id))
 
     parsed_by_path: dict[Path, dict[str, Any]] = {}
     for path in record_paths(records_dir):

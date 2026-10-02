@@ -1,7 +1,7 @@
 {
-  "comment": "Digest pin for the vendored public-site styleguide (the gateway repo remains the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). Re-copy repin executed 2026-10-02 per the fold-R8 note: the #345 gateway merge reworded the component notes, so this repin re-COPIED gateway main's bytes (635e5b9), recomputed sha256 and updated source together in this one commit \u2014 the re-copy form, not a re-citation.",
-  "source": "madeinoz67/benchweave@635e5b9:docs/internal/public-site-styleguide.html",
-  "sha256": "b49bdc2ef9db997f70bfa3c35ec7f9ed4b71ca4b3ef0e36cc4880512adc34486",
+  "comment": "Digest pin for the vendored public-site styleguide (the gateway repo remains the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). CONVERGENCE re-copy 2026-10-03: gateway PR #350 adopted the records-table/record-page CSS declarations AND fired the Registry sub-brand (owner decision \u2014 live header); this vendor re-copied those bytes, recomputed sha256 and updated source together. The cited commit is #350's tip \u2014 durable as a main commit once #350 merges (merge order: #350 first, this PR second). The interim registry-authored divergence block is deleted.",
+  "source": "madeinoz67/benchweave@ba42dd0:docs/internal/public-site-styleguide.html",
+  "sha256": "bfefa38e421ab8800dd80afa3f7a2ccfcc87bf8c1894e6b3354900ca388728e4",
   "vendored_path": "vendored/gateway/public-site-styleguide.html",
   "pinned_date": "2026-10-02"
 }

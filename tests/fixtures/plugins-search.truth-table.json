@@ -1,5 +1,5 @@
 {
-  "comment": "Hand-derived search truth table for the issue #224 slice-2 catalogue (B1, CR-24). Derived by hand from plugins-index.fixture.json BEFORE any search code was written (C1 discipline). Every case names a dimension arm, the query, and the exactly-expected set of package ids (sorted). An empty query dimension means no filter on it. The truth is evaluated by tests/contract/run_search_spec.mjs against website/assets/plugins.js filterRows; internal consistency (expected ids exist in the fixture; every dimension covered; the negative and combined arms present) is pinned by tests/contract/test_website_plugins_search.py.",
+  "comment": "Hand-derived search truth table for the issue #224 slice-2 catalogue (B1, CR-24), grown by the #224 follow-on (evidence dimension + hardware row, re-derived by hand from the grown fixture BEFORE any predicate code moved — the C1 discipline). Every case names a dimension arm, the query, and the exactly-expected set of package ids (sorted). An empty query dimension means no filter on it. The truth is evaluated by tests/run_search_spec.mjs against catalogue/assets/plugins.js filterRows; internal consistency (expected ids exist in the fixture; every dimension covered; the negative and combined arms present) is pinned by tests/test_catalogue_search.py.",
   "fixture": "plugins-index.fixture.json",
   "cases": [
     {
@@ -29,6 +29,7 @@
       "dimension": "name",
       "query": {"text": "northwind"},
       "expect": [
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu",
@@ -102,6 +103,7 @@
       "expect": [
         "copperleaf-labs/copperleaf-daq",
         "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu"
@@ -127,6 +129,7 @@
         "copperleaf-labs/copperleaf-therm",
         "harborline-systems/harborline-relay",
         "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-psu",
         "northwind-instruments/northwind-scope"
@@ -164,7 +167,8 @@
       "query": {"signature_state": "unsigned"},
       "expect": [
         "harborline-systems/harborline-pwm",
-        "harborline-systems/harborline-relay"
+        "harborline-systems/harborline-relay",
+        "northwind-instruments/northwind-cal"
       ]
     },
     {
@@ -175,6 +179,7 @@
         "copperleaf-labs/copperleaf-therm",
         "harborline-systems/harborline-relay",
         "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu"
       ]
@@ -220,6 +225,7 @@
         "harborline-systems/harborline-pwm",
         "harborline-systems/harborline-relay",
         "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu"
@@ -234,6 +240,7 @@
         "copperleaf-labs/copperleaf-shunt",
         "copperleaf-labs/copperleaf-therm",
         "harborline-systems/harborline-relay",
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu",
         "northwind-instruments/northwind-scope"
@@ -265,6 +272,7 @@
         "harborline-systems/harborline-pwm",
         "harborline-systems/harborline-relay",
         "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu",
@@ -301,6 +309,7 @@
       "dimension": "combined",
       "query": {"publisher": "northwind-instruments", "standard_version": "1.4", "kind": "all"},
       "expect": [
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu"
@@ -323,6 +332,7 @@
         "harborline-systems/harborline-pwm",
         "harborline-systems/harborline-relay",
         "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu",
@@ -337,6 +347,38 @@
         "copperleaf-labs/copperleaf-therm",
         "harborline-systems/harborline-relay"
       ]
+    },
+    {
+      "id": "evidence-hardware-include-if-any",
+      "dimension": "evidence",
+      "query": {"evidence_level": "hardware"},
+      "expect": ["northwind-instruments/northwind-cal"]
+    },
+    {
+      "id": "evidence-simulated-matches-every-simulated-row",
+      "dimension": "evidence",
+      "query": {"evidence_level": "simulated"},
+      "expect": [
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-cal",
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-psu",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "evidence-structural",
+      "dimension": "evidence",
+      "query": {"evidence_level": "structural"},
+      "expect": ["copperleaf-labs/copperleaf-daq"]
+    },
+    {
+      "id": "evidence-hardware-ands-with-signature",
+      "dimension": "combined",
+      "query": {"evidence_level": "hardware", "signature_state": "unsigned"},
+      "expect": ["northwind-instruments/northwind-cal"]
     }
   ]
 }
