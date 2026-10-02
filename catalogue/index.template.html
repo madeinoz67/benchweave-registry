@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Plugin catalogue — BenchWeave</title>
+<title>Plugin catalogue, BenchWeave Registry</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -12,83 +12,176 @@
 <body>
 
 <header class="top">
-  <div class="wordmark">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <div class="top-inner">
+  <!-- The wordmark block is switchable (issue #224 follow-on §2.8): the
+       default carries the gateway mark; --registry-mark swaps in the Registry
+       sub-brand variant (hex + the three stack-glyph bars + the Registry
+       pill) on the owner's word. The switch ships DARK. -->
+  <!-- bw:wordmark begin -->
+  <a class="wordmark" href="#catalogue">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="var(--amber-solid)" stroke-width="1.6"/>
       <path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="var(--amber-solid)" stroke-width="2" stroke-linecap="round"/>
       <path d="M17 7 L7 17" stroke="var(--blue-solid)" stroke-width="2" stroke-linecap="round"/>
     </svg>
-    BenchWeave
-  </div>
-  <nav class="toc" aria-label="Site">
-    <a href="https://github.com/madeinoz67/benchweave">gateway repository →</a>
-    <a href="https://github.com/madeinoz67/benchweave-registry/tree/main/releases">releases →</a>
+    <span>BenchWeave</span>
+  </a>
+  <!-- bw:wordmark end -->
+  <nav class="site-nav" aria-label="Registry">
+    <a href="#catalogue" aria-current="page">Catalogue</a>
+    <!-- Publishers and Advisories are slice-4 surfaces (#226) and the
+         publication prose is maintainer-facing today (D-S2m): they render as
+         muted non-links — a static page must not carry a link it cannot
+         honor (§2.1). -->
+    <span class="nav-future" aria-disabled="true" title="Publishers arrives with slice 4 (gateway issue #226)">Publishers</span>
+    <span class="nav-future" aria-disabled="true" title="Advisories arrives with slice 4 (gateway issue #226)">Advisories</span>
+    <span class="nav-future" aria-disabled="true" title="User-facing publication prose is deferred (D-S2m)">How publication works</span>
   </nav>
+  <div class="top-tools">
+    <a class="repo-link" href="https://github.com/madeinoz67/benchweave-registry">Repository of record
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    <!-- The theme-switcher icon is the circle-free rewrite of Lucide's sun
+         (§2.8's pre-committed pick: rewrite the icon, keep the strict
+         shape-ban arms unchanged). -->
+    <button type="button" id="bw-theme-toggle" class="theme-toggle" aria-label="Switch colour theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12a4 4 0 1 0 8 0 4 4 0 1 0-8 0"></path><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+    </button>
+  </div>
+  </div>
 </header>
 
-<main>
+<main id="catalogue">
   <div class="intro-head">
-    <p class="eyebrow mono">Registry · catalogue</p>
-    <h1>Plugin catalogue</h1>
-    <p>The catalogue of published releases, rendered from the registry repository of record.</p>
-    <p class="note">There is no hosted registry — this page is generated from a git repository
-    of record. Publication is discovery and provenance, never authorization: installing a
-    plugin stays local admission on your own bench. Unverified markers ride every row
-    (process review is not proof).</p>
+    <div class="intro-lede">
+      <h1>Plugin catalogue</h1>
+      <!-- The lede and the footer negation below are exact-byte pinned by
+           tests/test_catalogue_page.py (the honesty amendment) — they stay on
+           one line each so the pin is against real bytes. -->
+      <p>Published plugin releases, rendered from the registry repository of record. Publication is discovery and provenance, never authorization: installing a plugin stays local admission on your own bench.</p>
+    </div>
+    <!-- bw:snapshot -->
   </div>
 
-  <section id="catalogue">
-    <div class="filter-bar" role="search" aria-label="Filter plugins">
-      <label>Search <input type="text" id="bw-filter-text" placeholder="name, id or summary"></label>
-      <label>Publisher <select id="bw-filter-publisher">
-        <option value="all" selected>any</option>
-      </select></label>
-      <label>Standard <select id="bw-filter-standard">
-        <option value="all" selected>any</option>
-      </select></label>
-      <label>Signature <select id="bw-filter-signature">
-        <option value="all">any</option>
-        <option value="signed-valid" selected>signed</option>
-        <option value="unsigned">unsigned</option>
-      </select></label>
-      <label>Maintenance <select id="bw-filter-maintenance">
-        <option value="all" selected>any</option>
-        <option value="maintained">maintained</option>
-        <option value="maintenance_only">maintenance only</option>
-        <option value="unmaintained">unmaintained</option>
-        <option value="unknown">unknown</option>
-      </select></label>
-      <label>Advisories <select id="bw-filter-advisories">
-        <option value="all" selected>any</option>
-        <option value="present">present</option>
-        <option value="none">none</option>
-      </select></label>
-      <label>Kind <select id="bw-filter-kind">
-        <option value="all">all kinds</option>
-        <option value="admitted-release" selected>admitted releases</option>
-        <option value="community-shared">community shared</option>
-        <option value="in-tree-fixture">in-tree fixture</option>
-      </select></label>
-      <label><input type="checkbox" id="bw-filter-cap-network"> Network egress</label>
-      <label><input type="checkbox" id="bw-filter-cap-subprocess"> Subprocess or native library</label>
-      <label><input type="checkbox" id="bw-filter-cap-filesystem"> Filesystem writes</label>
+  <!-- The wiring adaptation, stated honestly (§2.2): the mockup wires this
+       form with hx-get to a server-fed /catalogue/rows endpoint a static
+       Pages deploy cannot answer. The shipped form keeps the interaction and
+       drops the transport — the client predicate filters the same-origin
+       fetched index; htmx's role on this site is the drill-down, which
+       static files CAN serve. No hx- attributes here. -->
+  <form id="filters" role="search" aria-label="Filter releases">
+    <div class="filters-row">
+      <div class="filter-search">
+        <label for="q">Search name, package or publisher</label>
+        <div class="search-wrap">
+          <span class="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><path d="M3 11a8 8 0 1 0 16 0 8 8 0 1 0-16 0"></path></svg></span>
+          <input id="q" name="q" type="search" placeholder="dps150, madeinoz67, logic">
+        </div>
+      </div>
+      <div class="filter-field">
+        <label for="kind">Kind</label>
+        <select id="kind" name="kind">
+          <option value="all">All kinds</option>
+          <option value="admitted-release" selected>Admitted releases</option>
+          <option value="community-shared">Community shared</option>
+          <option value="in-tree-fixture">In-tree fixtures</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="sig">Signature</label>
+        <select id="sig" name="sig">
+          <option value="all">Any</option>
+          <option value="signed-valid" selected>Signed</option>
+          <option value="unsigned">Unsigned</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="ev">Evidence</label>
+        <select id="ev" name="ev">
+          <option value="all" selected>Any level</option>
+          <option value="hardware">Hardware</option>
+          <option value="simulated">Simulated</option>
+          <option value="structural">Structural</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="maint">Maintenance</label>
+        <select id="maint" name="maint">
+          <option value="all" selected>Any</option>
+          <option value="maintained">Maintained</option>
+          <option value="maintenance_only">Maintenance only</option>
+          <option value="unmaintained">Unmaintained</option>
+          <option value="unknown">Unknown</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="adv">Advisories</label>
+        <select id="adv" name="adv">
+          <option value="all" selected>Any</option>
+          <option value="present">Present</option>
+          <option value="none">None</option>
+        </select>
+      </div>
     </div>
-    <p id="catalogue-count" class="catalogue-meta" aria-live="polite"></p>
-    <p id="catalogue-notice" class="note" hidden>The catalogue could not be refreshed from the
-    index — the rows below are the generated view. Filtering needs the index; the identity,
-    evidence and advisory fields on each card stand.</p>
-    <div class="spec-grid" id="catalogue-list">
+    <fieldset class="caps-fieldset">
+      <legend>Declared capabilities, show releases that use</legend>
+      <label class="cap-check"><input type="checkbox" name="cap" value="network_egress">Network egress</label>
+      <label class="cap-check"><input type="checkbox" name="cap" value="subprocess_or_native_library">Subprocess or native library</label>
+      <label class="cap-check"><input type="checkbox" name="cap" value="filesystem_writes_beyond_evidence_retention">Filesystem writes</label>
+      <button type="reset" id="bw-clear-filters" class="clear-filters">Clear filters</button>
+    </fieldset>
+  </form>
+
+  <div class="table-wrap">
+    <table class="bw-records">
+      <caption id="catalogue-count" class="table-caption" aria-live="polite"><!-- bw:caption --></caption>
+      <thead>
+        <tr>
+          <th scope="col">Signature</th>
+          <th scope="col">Release</th>
+          <th scope="col">Publisher</th>
+          <th scope="col">Evidence</th>
+          <th scope="col">Declared capabilities</th>
+          <th scope="col">Maintenance</th>
+          <th scope="col">Advisories</th>
+          <th scope="col">Compatibility</th>
+        </tr>
+      </thead>
+      <tbody id="release-rows">
 <!-- bw:catalogue-cards begin -->
 <!-- bw:catalogue-cards end -->
+      </tbody>
+    </table>
+  </div>
+  <p id="catalogue-empty" hidden>No releases match the current filters.</p>
+  <p id="catalogue-notice" class="note" hidden>The catalogue could not be refreshed from the
+    index — the rows below are the generated view. Filtering needs the index; the identity,
+    evidence and advisory fields on each row stand.</p>
+
+  <section class="legend" aria-labelledby="legend-h">
+    <div class="legend-card">
+      <h2 id="legend-h">Reading the table</h2>
+      <span class="legend-line"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 17-2.156-1.868A.5.5 0 0 0 18 15.5v.5a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1c0-2.545-3.991-3.97-8.5-4a1 1 0 0 0 0 5c4.153 0 4.745-11.295 5.708-13.5a2.5 2.5 0 1 1 3.31 3.284"></path><path d="M3 21h18"></path></svg><span><b>Signed</b>: the publisher's signature verifies against the key the registry records for them. It proves who published the release, not that it is safe or correct.</span></span>
+      <span class="legend-line muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.1 2.182a10 10 0 0 1 3.8 0"></path><path d="M13.9 21.818a10 10 0 0 1-3.8 0"></path><path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"></path><path d="M2.182 13.9a10 10 0 0 1 0-3.8"></path><path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"></path><path d="M21.818 10.1a10 10 0 0 1 0 3.8"></path><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"></path><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"></path></svg><span><b>Unsigned</b>: no publisher signature, so provenance cannot be checked.</span></span>
     </div>
-    <p id="catalogue-empty" hidden>No releases match the current filters.</p>
+    <div class="legend-card">
+      <h3>Declared capabilities</h3>
+      <span class="legend-line cap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12a10 10 0 1 0 20 0 10 10 0 1 0-20 0"></path><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg><span>Network egress</span></span>
+      <span class="legend-line cap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20v2"></path><path d="M12 2v2"></path><path d="M17 20v2"></path><path d="M17 2v2"></path><path d="M2 12h2"></path><path d="M2 17h2"></path><path d="M2 7h2"></path><path d="M20 12h2"></path><path d="M20 17h2"></path><path d="M20 7h2"></path><path d="M7 20v2"></path><path d="M7 2v2"></path><path d="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path><path d="M9 8h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"></path></svg><span>Subprocess or native library</span></span>
+      <span class="legend-line cap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 16h.01"></path><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><path d="M21.946 12.013H2.054"></path><path d="M6 16h.01"></path></svg><span>Filesystem writes beyond evidence retention</span></span>
+    </div>
+    <div class="legend-card">
+      <h3>Unverified markers</h3>
+      <span class="muted">Every self-attested surface carries its marker. Review is process, not proof, and a clean digest or passed evidence never reads as verified.</span>
+    </div>
   </section>
 </main>
 
 <footer class="page-foot">
-  <p class="catalogue-meta"><!-- bw:provenance --></p>
+  <p class="catalogue-meta">Rendered view of the <a href="https://github.com/madeinoz67/benchweave-registry">registry repository of record</a>. There is no hosted registry service.</p>
+  <p class="catalogue-meta mono"><!-- bw:provenance --></p>
 </footer>
 
-<script src="assets/plugins.js"></script>
+<script src="assets/htmx.min.js" defer></script>
+<script src="assets/plugins.js" defer></script>
 </body>
 </html>

@@ -1,7 +1,17 @@
 {
-  "comment": "Digest pin for the vendored public-site styleguide (the gateway repo remains the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). Re-copy repin executed 2026-10-02 per the fold-R8 note: the #345 gateway merge reworded the component notes, so this repin re-COPIED gateway main's bytes (635e5b9), recomputed sha256 and updated source together in this one commit \u2014 the re-copy form, not a re-citation.",
+  "comment": "Digest pin for the vendored public-site styleguide (the gateway repo remains the authored authority; this copy is a vendor, repinned only by a deliberate edit to this record). DIVERGENCE recorded 2026-10-02 by the #224 follow-on (records table + drill-down): the Records table and Record page component declarations are REGISTRY-AUTHORED additions in this copy, pending the gateway's authored adoption — a re-copy repin converges this vendor with gateway main when that PR lands (the base bytes outside the added sections remain the 635e5b9 re-copy).",
   "source": "madeinoz67/benchweave@635e5b9:docs/internal/public-site-styleguide.html",
-  "sha256": "b49bdc2ef9db997f70bfa3c35ec7f9ed4b71ca4b3ef0e36cc4880512adc34486",
+  "sha256": "1af91d814c22a835cfc31037290391e564132f473eae4292ae43a5b0829c06f5",
   "vendored_path": "vendored/gateway/public-site-styleguide.html",
-  "pinned_date": "2026-10-02"
+  "pinned_date": "2026-10-02",
+  "divergence": {
+    "recorded": "2026-10-02",
+    "sections": [
+      "Records table",
+      "Record page"
+    ],
+    "authored": "benchweave-registry (issue #224 follow-on)",
+    "base": "madeinoz67/benchweave@635e5b9:docs/internal/public-site-styleguide.html",
+    "converges": "re-copy repin after the gateway's authored adoption PR"
+  }
 }

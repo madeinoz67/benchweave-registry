@@ -171,6 +171,23 @@
   /* Catalogue meta line (issue #224) */
   .catalogue-meta { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
 
+  /* Records table (issue #224 follow-on — registry-authored, pending gateway adoption) */
+  .bw-records { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .bw-records th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text-muted); text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+  .bw-records td { padding: 14px 12px; border-bottom: 1px solid var(--border); vertical-align: top; text-align: left; }
+  .sig { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .sig-signed { color: var(--text); font-weight: 500; }
+  .sig-unsigned { color: var(--text-muted); }
+  .release-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--text); text-decoration: none; }
+  .cap-line { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--amber); }
+
+  /* Record page (issue #224 follow-on — registry-authored, pending gateway adoption) */
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-muted); }
+  .record-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; align-items: start; }
+  .record-main th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text-muted); text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; width: 240px; vertical-align: top; }
+  .aside-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-elevated); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .open-files-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: var(--radius-sm); background: var(--amber-solid); color: var(--amber-on); font-weight: 600; font-size: 14px; text-decoration: none; }
+
   /* Table */
   table.gd-map { width: 100%; border-collapse: collapse; font-size: 14px; }
   table.gd-map th, table.gd-map td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -346,6 +363,16 @@
       <p class="catalogue-meta">northwind-instruments · MIT · <span class="badge badge-success">maintained</span></p>
     </div>
     <p class="note" style="margin-top:10px;">The registry-served catalogue's per-card identity run (issue #224): publisher · licence · maintenance in mono 13px. Values are always machine-rendered from the served index — never hand-typed — and absent values render as an explicit "none", never as a guess.</p>
+
+    <h3>Records table <span class="badge badge-info">registry-authored · pending gateway adoption</span></h3>
+    <p class="note" style="margin-bottom:10px;">Declared in the registry's vendored copy by the #224 follow-on (records table + drill-down); the gateway repo remains the authored authority — this declaration converges by re-copy repin when the gateway PR lands.</p>
+    <div class="code-block" style="max-width:720px;"><span class="muted">/* the eight columns */</span><br>Signature · Release · Publisher · Evidence · Declared capabilities · Maintenance · Advisories · Compatibility
+<span class="muted">/* shape */</span><br>.bw-records — border-collapse table, 14px body, mono 12px muted th run,<br>td padding 14px 12px on --border rules, vertical-align top;<br>signature cell icon+text .sig (13px, never icon-only);<br>release name .release-name Space Grotesk 600 15px;<br>capability lines .cap-line 13px on --amber;</div>
+    <p class="note" style="margin-top:10px;">The catalogue's records table (issue #224 follow-on): eight columns, live caption, kind badge inside the Release cell, tone remapping (evidence passed = neutral inset / partial = warning / failed = danger; maintenance maintained + maintenance-only = neutral inset, unmaintained = warning, unknown = muted outline). Page width 1280px; the type scale is the mockup's (h1 40px). Versions and compatibility stamp statically in rows — machine-rendered from the served index, never hand-typed.</p>
+
+    <h3>Record page <span class="badge badge-info">registry-authored · pending gateway adoption</span></h3>
+    <div class="code-block" style="max-width:720px;"><span class="muted">/* layout */</span><br>.record-grid — minmax(0,1fr) + 340px aside, 40px gap;<br>.breadcrumb — 14px muted run, mono segments;<br>.aside-card — --bg-elevated card, --radius-md, 18px 20px padding;<br>.open-files-button — 44px amber solid button (--amber-solid / --amber-on);<br>provenance/evidence/compatibility tables — mono 12px muted th at 240px.</div>
+    <p class="note" style="margin-top:10px;">The standalone drill-down page (one per release, five directories under the site root): every field rendered or explicitly none — provenance join fields (vetted date, key-validity window, protections) come from the registry's publisher records; the signature line is proven, not decorative (generation-time verification); downloads link raw at the stamped commit. No external JS on the page.</p>
   </section>
 
   <section id="ambient">

@@ -18,6 +18,8 @@ import hashlib
 import importlib.util
 import json
 import re
+import shutil
+import subprocess
 from collections.abc import Iterator
 from html.parser import HTMLParser
 from pathlib import Path
@@ -34,27 +36,89 @@ INDEX = REPO / "index.json"
 
 SHA = "0" * 39 + "1"  # invented 40-hex sha for render tests
 
-# CR-20's seven contract fields, as the card slots the renderer must carry
-# (rendered or explicitly "none" — the value arms are below).
-CONTRACT_SLOTS = (
+# The records-table row slots (the #224 follow-on's column set — the CR-20
+# field contract itself moves to the record page, whose arms live in
+# tests/test_catalogue_record.py). Rendered or explicitly none.
+ROW_SLOTS = (
     "display-name",
-    "summary",
+    "release-line",
     "publisher",
-    "licence",
-    "maintenance",
     "kind",
-    "release-id",
-    "version",
-    "digest",
+    "markers",
+    "signature",
+    "evidence",
+    "capabilities",
+    "maintenance",
+    "advisories",
     "compat",
-    "evidence-link",
-    "source-revision",
 )
 
-# The lede (B3'): plain language, exactly what exists — pinned so a drift
-# toward a service claim reddens. Deliberately does NOT contain the phrase
-# "registry service" even in negation: the whole-page scan is strict.
-LEDE = "The catalogue of published releases, rendered from the registry repository of record."
+# The table's eight columns, in order (the mockup's set, §2.3).
+COLUMNS = (
+    "Signature",
+    "Release",
+    "Publisher",
+    "Evidence",
+    "Declared capabilities",
+    "Maintenance",
+    "Advisories",
+    "Compatibility",
+)
+
+# The Registry sub-brand mark's three stack-glyph bars, extracted from the
+# vendored styleguide's Sub-brands grid (§2.8: the fired posture's rects are
+# byte-matched against the vendored spec, never retyped).
+VENDORED_STYLEGUIDE = REPO / "vendored" / "gateway" / "public-site-styleguide.html"
+
+# The lede (B3', amended by the #224 follow-on §5): the mockup's wording —
+# pinned so a drift toward a service claim reddens. It makes no service claim.
+LEDE = (
+    "Published plugin releases, rendered from the registry repository of record. "
+    "Publication is discovery and provenance, never authorization: installing a "
+    "plugin stays local admission on your own bench."
+)
+
+# The pinned footer negation (the honesty amendment, §5): "registry service"
+# may appear ONLY here, in honest negation, exactly once. The rendered form
+# carries the anchor on "registry repository of record"; the pin is against
+# the artifact's real bytes.
+FOOTER_SENTENCE = (
+    "Rendered view of the "
+    '<a href="https://github.com/madeinoz67/benchweave-registry">'
+    "registry repository of record</a>. There is no hosted registry service."
+)
+
+# The footer negation as a WHOLE PARAGRAPH (fold F3, lane A F1): the
+# pre-fold arm counted the phrase and pinned a SUBSTRING — it defended the
+# phrase, not the claim, so lane A's plants (a ". One is coming." suffix on
+# the pinned sentence, "hosted front end" prose, a "hosted catalogue" meta)
+# all passed. The negation is now pinned as the exact paragraph element.
+FOOTER_PARAGRAPH = (
+    '<p class="catalogue-meta">Rendered view of the '
+    '<a href="https://github.com/madeinoz67/benchweave-registry">'
+    "registry repository of record</a>. There is no hosted registry service.</p>"
+)
+
+# The service-claim vocabulary (fold F3): these terms may appear ONLY inside
+# the pinned footer negation paragraph — nowhere else in any generated page
+# (prose, meta, title, attributes, comments; both templates, both mark
+# postures, record pages included).
+SERVICE_CLAIM_VOCAB = ("hosted", "front end", "coming soon", "always up to date")
+
+
+def strip_footer_negations(text: str) -> str:
+    return text.replace(FOOTER_PARAGRAPH, "")
+
+
+def assert_no_service_claim_vocabulary(page: str, what: str) -> None:
+    """F3's scoping arm: after removing the pinned negation paragraph(s),
+    no service-claim vocabulary term remains anywhere in the page."""
+    remainder = strip_footer_negations(page).lower()
+    for term in SERVICE_CLAIM_VOCAB:
+        assert term not in remainder, (
+            f"{what}: the service-claim term {term!r} appears outside the pinned "
+            "footer negation — a generated page may not carry a service claim"
+        )
 
 
 def _module() -> Any:
@@ -69,8 +133,15 @@ def _template() -> str:
     return TEMPLATE.read_text(encoding="utf-8")
 
 
-def _render(index_bytes: bytes, sha: str = SHA) -> str:
-    return str(_module().render_page(index_bytes, _template(), sha))
+def _render(
+    index_bytes: bytes, sha: str = SHA, *, publisher_count: int = 0, registry_mark: bool = False
+) -> str:
+    return str(
+        _module().render_page(
+            index_bytes, _template(), sha,
+            publisher_count=publisher_count, registry_mark=registry_mark,
+        )
+    )
 
 
 def _cards(page: str) -> list[str]:
@@ -146,34 +217,45 @@ def _ancestor_classes(node: _Node) -> list[str]:
 
 
 def assert_dom_containment(html: str) -> None:
-    """Every data-bw-slot descends from its spec-card; every card is either
-    the hidden template shape or a package-identified row card; every card
-    carries its kind slot. Substring containment proves none of this — an
-    unclosed card opening tag leaves the slots parsed-but-orphaned."""
+    """Every data-bw-slot descends from its table row (``tr.bw-row``); every
+    row is either the hidden template shape or a package-identified row; every
+    row carries its kind slot inside the Release cell (§5's reshaped
+    containment arm — the unclosed-tag HIGH's standing guard, table form).
+    Substring containment proves none of this — an unclosed row opening tag
+    leaves the slots parsed-but-orphaned."""
     nodes = list(_walk(_parse(html)))
     slots = [n for n in nodes if "data-bw-slot" in n.attrs]
     assert slots, "precondition: the page carries slot elements"
     for slot in slots:
         classes = _ancestor_classes(slot)
-        assert any("spec-card" in c.split() for c in classes), (
+        assert any("bw-row" in c.split() for c in classes), (
             f"slot data-bw-slot={slot.attrs['data-bw-slot']!r} does not descend "
-            "from its spec-card (an unclosed card opening tag?)"
+            "from its tr.bw-row (an unclosed row opening tag?)"
         )
-    cards = [n for n in nodes if n.tag == "div" and "spec-card" in n.attrs.get("class", "").split()]
-    assert cards, "precondition: the page carries cards"
-    for card in cards:
-        in_template = any(
-            ancestor.tag == "template" for ancestor in _ancestors(card)
+    rows = [n for n in nodes if n.tag == "tr" and "bw-row" in n.attrs.get("class", "").split()]
+    assert rows, "precondition: the page carries rows"
+    for row in rows:
+        in_template = any(ancestor.tag == "template" for ancestor in _ancestors(row))
+        assert in_template or row.attrs.get("data-bw-package-id"), (
+            "a row carries neither the template shape nor a package id"
         )
-        assert in_template or card.attrs.get("data-bw-package-id"), (
-            "a card carries neither the template shape nor a package id"
+        release_cells = [
+            child
+            for child in _walk(row.children)
+            if child.tag == "td" and "td-release" in child.attrs.get("class", "").split()
+        ]
+        assert release_cells, (
+            f"row {row.attrs.get('data-bw-package-id', '(template)')} has no Release cell"
         )
         kinds = [
             child
-            for child in _walk(card.children)
+            for child in _walk(release_cells[0].children)
             if child.attrs.get("data-bw-slot") == "kind"
         ]
-        assert kinds, f"card {card.attrs.get('data-bw-package-id', '(template)')} has no kind slot"
+        assert kinds, (
+            f"row {row.attrs.get('data-bw-package-id', '(template)')} has no kind "
+            "badge inside its Release cell (CR-56)"
+        )
 
 
 def _ancestors(node: _Node) -> Iterator[_Node]:
@@ -184,8 +266,8 @@ def _ancestors(node: _Node) -> Iterator[_Node]:
 
 
 def test_dom_containment_on_the_fixture_page() -> None:
-    """The standing guard for the relocated renderer's HIGH: on the fixture
-    page (6 default cards + template), every slot sits inside its card."""
+    """The standing guard for the unclosed-tag HIGH: on the fixture page
+    (6 default rows + template), every slot sits inside its row."""
     assert_dom_containment(_render(FIXTURE.read_bytes()))
 
 
@@ -221,45 +303,104 @@ def test_default_page_excludes_non_default_kinds_and_unsigned() -> None:
         "harborline-systems/harborline-relay",  # admitted-release but unsigned
         "harborline-systems/harborline-relay16",  # community-shared
         "harborline-systems/harborline-pwm",  # community-shared + unsigned
+        "northwind-instruments/northwind-cal",  # admitted-release + hardware evidence, but unsigned
         "northwind-instruments/northwind-fixture",  # in-tree-fixture
     ):
         assert f'data-bw-package-id="{pid}"' not in page, f"non-default row rendered: {pid}"
 
 
-def test_static_cards_carry_the_contract_fields() -> None:
-    """CR-20's structural arm: every card carries the contract slots
-    (rendered or explicitly "none")."""
+def test_static_rows_carry_the_column_slots() -> None:
+    """The reshaped structural arm: every static row carries the column
+    slots (rendered or the table's explicit-none form)."""
     page = _render(FIXTURE.read_bytes())
     cards = _cards(page)
-    assert len(cards) == 6, f"the fixture's default view is 6 cards, got {len(cards)}"
+    assert len(cards) == 6, f"the fixture's default view is 6 rows, got {len(cards)}"
     for card in cards:
-        for slot in CONTRACT_SLOTS:
-            assert f'data-bw-slot="{slot}"' in card, f"card lacks contract slot {slot}"
+        for slot in ROW_SLOTS:
+            assert f'data-bw-slot="{slot}"' in card, f"row lacks column slot {slot}"
 
 
-def test_every_default_card_is_kind_tagged() -> None:
-    """CR-56's static half: a row never renders without its kind tag."""
+def test_the_table_carries_the_mockups_eight_columns() -> None:
+    """B-T's column arm: exactly the mockup's eight columns, in order."""
+    page = _render(FIXTURE.read_bytes())
+    head = page.split("<thead>", 1)[1].split("</thead>", 1)[0]
+    headers = re.findall(r"<th[^>]*>([^<]+)</th>", head)
+    assert tuple(headers) == COLUMNS, headers
+
+
+def test_every_default_row_is_kind_badged_in_the_release_cell() -> None:
+    """CR-56's static half, scoped (§5): a row never renders without its
+    kind badge — inside the Release cell, in the mockup's display case."""
     page = _render(FIXTURE.read_bytes())
     for card in _cards(page):
-        assert 'data-bw-slot="kind"' in card and "admitted-release" in card
+        release = card.split('class="td-release"', 1)[1]
+        assert 'data-bw-slot="kind"' in release and "Admitted release" in release
 
 
-def test_explicit_none_for_absent_evidence_and_advisories() -> None:
-    """CR-20's "or explicitly none"."""
+def test_every_static_row_is_signed_with_icon_and_text_and_title() -> None:
+    """B-T/B-I's static half: default rows are signed by definition — the
+    signature cell carries the Lucide signature icon, the visible text
+    'Signed', and the provenance title verbatim (never icon-only)."""
     page = _render(FIXTURE.read_bytes())
-    assert "no test evidence" in page
-    assert "no advisories" in page
+    for card in _cards(page):
+        sig = card.split('class="td-sig"', 1)[1].split("</td>", 1)[0]
+        assert "<svg" in sig, "a static row's signature cell lost its icon"
+        assert ">Signed<" in sig, "a static row's signature cell lost its visible text"
+        assert "Publisher signature valid against the key recorded for this publisher." in card
+        assert "sig-unsigned" not in card, (
+            "an unsigned cell rendered in the static default view (the legend's "
+            "'Unsigned' word is fine; the cell class is the discriminator)"
+        )
 
 
-def test_template_card_is_the_single_shape_source() -> None:
+def test_version_and_compatibility_stamp_statically_in_rows() -> None:
+    """B-T (mockup-driven): rows stamp version and compatibility as static
+    data (§2.3) — the release line carries package and version, the compat
+    cell carries the joined string; no hidden slot waits for JS."""
     page = _render(FIXTURE.read_bytes())
-    assert page.count("data-bw-template") == 1, "exactly one template card required"
+    assert "northwind-instruments/northwind-psu · 0.1.0" in page
+    assert ">OTDP 0.2.2 · adapter 1.1 · STG 1.4<" in page
+    assert 'data-bw-slot="compat" hidden' not in page
+
+
+def test_empty_evidence_renders_no_badge_and_advisories_none_renders_muted() -> None:
+    """§2.3's explicit-none split: the TABLE renders no badge for empty
+    evidence (the record page carries the explicit-none) and muted 'None'
+    for absent advisories."""
+    page = _render(FIXTURE.read_bytes())
+    # northwind-load carries no evidence and no advisories (card index 3:
+    # defaults sort daq, shunt, therm, load, psu, scope)
+    load = _cards(page)[3]
+    assert "northwind-load" in load
+    evidence = load.split('class="td-evidence"', 1)[1].split("</td>", 1)[0]
+    assert "badge" not in evidence, "empty evidence rendered a badge in the table"
+    advisories = load.split('class="td-adv"', 1)[1].split("</td>", 1)[0]
+    assert ">None<" in advisories
+    assert "text-muted" in advisories
+
+
+def test_capability_lines_and_none_declared() -> None:
+    """The capabilities cell: one icon+label line per TRUE capability; a row
+    with no true capability renders muted 'None declared'."""
+    page = _render(FIXTURE.read_bytes())
+    cards = _cards(page)
+    # northwind-psu: network_egress only
+    psu = next(card for card in cards if "northwind-psu" in card)
+    caps = psu.split('class="td-caps"', 1)[1].split("</td>", 1)[0]
+    assert "Network egress" in caps and "<svg" in caps
+    assert "Subprocess or native library" not in caps
+
+
+def test_template_row_is_the_single_shape_source() -> None:
+    page = _render(FIXTURE.read_bytes())
+    assert page.count("data-bw-template") == 1, "exactly one template row required"
 
 
 def test_empty_catalogue_renders_the_honest_empty_sentence() -> None:
     page = _render(b'{"index_version": 1, "rows": []}')
     assert "No published releases yet" in page
-    assert "data-bw-template" in page, "the template card survives the empty state"
+    assert 'class="bw-empty-row"' in page, "the honest empty renders as a table row"
+    assert "data-bw-template" in page, "the template row survives the empty state"
 
 
 def test_page_generation_is_deterministic() -> None:
@@ -269,9 +410,37 @@ def test_page_generation_is_deterministic() -> None:
 
 
 def test_generated_page_carries_no_template_markers() -> None:
+    """Fold F10: the unfired render strips the WHOLE marker family — the
+    pre-fold render leaked the bw:wordmark delimiters (they were stripped
+    from the structural-check copy only), so the test's name overclaimed.
+    The fired posture keeps exactly its wordmark delimiters (the switch's
+    documented state, pinned by the fired arm below)."""
     page = _render(FIXTURE.read_bytes())
-    assert "bw:catalogue-cards begin" not in page
-    assert "bw:provenance -->" not in page
+    for marker in (
+        "bw:catalogue-cards begin",
+        "bw:catalogue-cards end",
+        "bw:provenance -->",
+        "bw:snapshot -->",
+        "bw:caption -->",
+        "bw:wordmark begin",
+        "bw:wordmark end",
+    ):
+        assert marker not in page, f"a template marker survived the render: {marker}"
+
+
+def test_the_fired_posture_keeps_only_its_wordmark_delimiters() -> None:
+    """F10's fired control: --registry-mark retains the wordmark begin/end
+    delimiters (they wrap the switched-in mark and the fired arm splits on
+    them) and strips every other marker."""
+    page = _render(FIXTURE.read_bytes(), registry_mark=True)
+    assert "bw:wordmark begin" in page and "bw:wordmark end" in page
+    for marker in (
+        "bw:catalogue-cards",
+        "bw:provenance -->",
+        "bw:snapshot -->",
+        "bw:caption -->",
+    ):
+        assert marker not in page, f"a non-wordmark marker survived: {marker}"
 
 
 # ── provenance (A06) ──────────────────────────────────────────────────────────
@@ -283,6 +452,11 @@ def test_the_provenance_stamp_names_the_generating_commit() -> None:
     stamped = re.search(r'data-bw-stamp="([0-9a-f]{40})"', page)
     assert stamped is not None and stamped.group(1) == SHA
     assert SHA in page
+    # the mockup's stamp line: short sha display (the full sha rides the
+    # data-bw-stamp attribute) plus the index format version (§2.1/§2.10)
+    assert f">{SHA[:12]}</span> · index v1" in page, (
+        "the stamp line lost its short-sha display or its index version"
+    )
 
 
 def test_a_non_commit_sha_refuses() -> None:
@@ -298,16 +472,25 @@ def test_a_non_commit_sha_refuses() -> None:
 
 
 def test_whole_page_makes_no_service_claim() -> None:
-    """B3's whole-page scan: the phrase 'registry service' appears nowhere
-    (lede, footer, prose, comments), no registry.benchweave.dev URL, and
-    no sub-brand mark glyph (the styleguide's stack-glyph bars and
-    tag-glyph dot ship no <rect>/<circle> shapes)."""
+    """B3's whole-page scan, AMENDED by the #224 follow-on (§5): the mockup's
+    footer uses "registry service" in honest negation, so the strict substring
+    ban became a pinned-negation + count arm — the phrase occurs EXACTLY ONCE,
+    in the footer sentence pinned verbatim below, and no AFFIRMATIVE service
+    claim exists anywhere (lede, prose, comments). The domain ban and the
+    mark-glyph shape bans (no <rect>, no <circle> — every icon is
+    circle/rect-free by rewrite, §2.8) stand unchanged."""
     page = _render(FIXTURE.read_bytes())
     lowered = page.lower()
-    assert "registry service" not in lowered, "the page claims a registry service"
+    assert lowered.count("registry service") == 1, (
+        f"'registry service' occurs {lowered.count('registry service')} time(s) — "
+        "exactly one is required (the footer's honest negation)"
+    )
+    assert FOOTER_SENTENCE in page, "the pinned footer negation drifted"
     assert "registry.benchweave.dev" not in lowered
     assert "<rect" not in page, "a stack-glyph (Registry sub-brand mark) shape rendered"
-    assert "<circle" not in page, "a tag-glyph (Standards sub-brand mark) shape rendered"
+    assert "<circle" not in page, (
+        "a circle-bearing glyph rendered (icons are rewritten circle-free)"
+    )
 
 
 def test_the_lede_is_string_pinned() -> None:
@@ -315,11 +498,87 @@ def test_the_lede_is_string_pinned() -> None:
     assert LEDE in page, "the plain-language lede drifted"
 
 
-def test_no_registry_service_language_in_the_template() -> None:
-    """The committed chrome carries the same honesty as the render."""
-    template = _template().lower()
-    assert "registry service" not in template
-    assert "registry.benchweave.dev" not in template
+def test_no_affirmative_service_claim_in_the_template() -> None:
+    """The committed chrome carries the same honesty as the render: the phrase
+    appears exactly once (the pinned footer negation, statically in the
+    template) and the domain never appears."""
+    template = _template()
+    assert template.lower().count("registry service") == 1, (
+        "the template must carry 'registry service' exactly once — the footer's "
+        "honest negation"
+    )
+    assert "There is no hosted registry service." in template
+    assert "registry.benchweave.dev" not in template.lower()
+
+
+# ── fold F3 (lane A F1, 2026-10-02): the claim, not the phrase ────────────────
+
+
+def test_the_footer_negation_is_pinned_as_a_whole_paragraph() -> None:
+    """F3: the negation is pinned as the exact paragraph element — any
+    suffix, prefix or rewording inside the footer paragraph reddens, where
+    the pre-fold substring pin let ". One is coming." ride."""
+    for source in (FIXTURE.read_bytes(), INDEX.read_bytes()):
+        page = _render(source)
+        assert page.count(FOOTER_PARAGRAPH) == 1, (
+            "the footer negation paragraph drifted (pinned as exact bytes)"
+        )
+
+
+def test_the_service_claim_vocabulary_is_scoped_to_the_negation() -> None:
+    """F3's scoping arm: 'hosted', 'front end', 'coming soon' and 'always up
+    to date' appear ONLY inside the pinned footer negation — nowhere else
+    in any generated page, either index source, either mark posture."""
+    for registry_mark in (False, True):
+        assert_no_service_claim_vocabulary(
+            _render(FIXTURE.read_bytes(), registry_mark=registry_mark),
+            f"the index page (registry_mark={registry_mark})",
+        )
+    assert_no_service_claim_vocabulary(
+        _render(INDEX.read_bytes()), "the committed-index page"
+    )
+
+
+def test_lane_a_plants_fail_the_fold_arms_and_passed_the_old_one() -> None:
+    """F3's RED discrimination, made permanent: lane A's exact plants — the
+    "hosted front end updates hourly" prose, the "hosted catalogue" meta
+    description and the ". One is coming." footer suffix — must FAIL the
+    paragraph pin and the vocabulary scoping. The control proves the
+    defect: the pre-fold phrase-count arm PASSES on the planted page (it
+    defended the phrase, not the claim)."""
+    planted = (
+        _template()
+        .replace(
+            "<title>Plugin catalogue, BenchWeave Registry</title>",
+            "<title>Plugin catalogue, BenchWeave Registry</title>\n"
+            '<meta name="description" content="the hosted catalogue for '
+            'BenchWeave plugins">',
+            1,
+        )
+        .replace(
+            "plugin stays local admission on your own bench.</p>",
+            "plugin stays local admission on your own bench.</p>\n"
+            "      <p>A hosted front end updates hourly.</p>",
+            1,
+        )
+        .replace(
+            "There is no hosted registry service.</p>",
+            "There is no hosted registry service. One is coming.</p>",
+            1,
+        )
+    )
+    for marker in ("hosted catalogue", "hosted front end", "One is coming"):
+        assert marker in planted, f"the plant {marker!r} did not apply"
+    planted_page = str(_module().render_page(FIXTURE.read_bytes(), planted, SHA))
+    # control: the pre-fold arm still passes — it counted the phrase only
+    assert planted_page.lower().count("registry service") == 1
+    # the fold arms catch all three plants
+    with pytest.raises(AssertionError, match="paragraph drifted"):
+        assert planted_page.count(FOOTER_PARAGRAPH) == 1, (
+            "the footer negation paragraph drifted"
+        )
+    with pytest.raises(AssertionError, match="service-claim term"):
+        assert_no_service_claim_vocabulary(planted_page, "the planted page")
 
 
 # ── fail-closed at generation ─────────────────────────────────────────────────
@@ -363,23 +622,43 @@ def test_structural_braces_refusal_covers_the_template_chrome() -> None:
 
 
 def test_row_free_text_is_data_not_a_stamped_claim() -> None:
-    """The §4 row 8 narrowing, pinned: a summary (or display name, or
-    advisory id, or source revision) carrying a version substring is DATA —
-    the render succeeds and the string appears on the card. The relocated
-    gateway renderer refused this whole class (4/4 repros, whole-render
-    brick); this arm refuses to go back."""
+    """The §4 row 8 narrowing, pinned (records-table form): row data carrying
+    a version substring is DATA — the render succeeds and the string appears
+    in the row. The relocated gateway renderer refused this whole class (4/4
+    repros, whole-render brick); this arm refuses to go back."""
     row = {
         "kind": "admitted-release",
         "signature_state": "signed-valid",
         "package_id": "northwind-instruments/alpha-tool",
-        "display_name": "Northwind alpha",
+        "version": "1.4.2",
+        "display_name": "Northwind alpha (requires OTDP 0.2.2 host support)",
         "summary": "Requires OTDP 0.2.2 and STG 1.4 host support.",
         "advisories": ["BW-ADV-099"],
         "source_revision": "a" * 40,
     }
     page = _render(json.dumps({"index_version": 1, "rows": [row]}).encode())
-    assert "Requires OTDP 0.2.2" in page
-    assert "BW-ADV-099" in page
+    assert "Northwind alpha (requires OTDP 0.2.2 host support)" in page
+
+
+def test_row_version_and_compat_stamp_as_data() -> None:
+    """The §2.3 flip: statically stamped version/compat cells ride between
+    the markers as DATA — a row carrying three-component versions renders
+    (only the blank row chrome refuses literals)."""
+    row = {
+        "kind": "admitted-release",
+        "signature_state": "signed-valid",
+        "package_id": "northwind-instruments/alpha-tool",
+        "version": "1.4.2",
+        "display_name": "Northwind alpha",
+        "compatibility": {
+            "otdp_versions": ["0.2.2"],
+            "adapter_api_versions": ["1.1"],
+            "stg_versions": ["1.4"],
+        },
+    }
+    page = _render(json.dumps({"index_version": 1, "rows": [row]}).encode())
+    assert "northwind-instruments/alpha-tool · 1.4.2" in page
+    assert "OTDP 0.2.2 · adapter 1.1 · STG 1.4" in page
 
 
 def test_a_missing_marker_pair_refuses() -> None:
@@ -400,6 +679,55 @@ def test_marker_display_map_twins_agree() -> None:
     assert js_map == _module().MARKER_DISPLAY, (js_map, _module().MARKER_DISPLAY)
 
 
+def test_the_display_map_twins_agree() -> None:
+    """The records-table display maps (kind badge text, maintenance badge
+    text and tone) each have two carriers — the generator stamps the static
+    rows, the JS clones the rest; unequal twins render one row two ways."""
+    module = _module()
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    pattern = re.compile(r"'([a-z0-9_-]+)':\s*'([^']*)'")
+
+    def js_map(name: str) -> dict[str, str]:
+        chunk = js.split(f"var {name}", 1)[1]
+        return dict(pattern.findall(chunk.split("}", 1)[0]))
+
+    assert js_map("KIND_DISPLAY") == module.KIND_DISPLAY, (
+        js_map("KIND_DISPLAY"), module.KIND_DISPLAY,
+    )
+    assert js_map("MAINTENANCE_DISPLAY") == module.MAINTENANCE_DISPLAY
+    assert js_map("MAINTENANCE_BADGE") == module.MAINTENANCE_BADGE
+
+
+def test_detail_id_and_record_url_twins_agree() -> None:
+    """The detail-host id slug and the record-page URL have two carriers
+    (the generator stamps them on static rows; the JS sets them on clones) —
+    unequal twins send htmx to a target that does not exist."""
+    module = _module()
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    assert "replace(/[^A-Za-z0-9-]/g, '-')" in js, "the JS lost its slug rewrite"
+    node = shutil.which("node")
+    assert node is not None, "node missing — see test_node_is_present in the search suite"
+    script = (
+        "const m = require(process.argv[1]);"
+        "const row = {package_id: 'northwind-instruments/alpha-tool',"
+        " version: '1.4.2', registry_id: 'benchweave-registry'};"
+        "console.log(m.detailId(row) + ' ' + m.recordUrl(row));"
+    )
+    result = subprocess.run(
+        [node, "-e", script, str(PLUGINS_JS)],
+        capture_output=True, text=True, check=False, cwd=REPO,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    want_id = module.detail_id(
+        {"package_id": "northwind-instruments/alpha-tool", "version": "1.4.2"}
+    )
+    want = (
+        f"{want_id} "
+        "records/benchweave-registry/northwind-instruments/alpha-tool/1.4.2/index.html"
+    )
+    assert result.stdout.strip() == want, (result.stdout, want)
+
+
 def test_truncate_at_twins_agree() -> None:
     """R2: the truncation length is one constant with two carriers — the
     Python TRUNCATE_AT and the JS `var TRUNCATE_AT = <n>;` must pin equal
@@ -408,6 +736,36 @@ def test_truncate_at_twins_agree() -> None:
     match = re.search(r"var TRUNCATE_AT = (\d+);", js)
     assert match is not None, "plugins.js lost its named TRUNCATE_AT"
     assert int(match.group(1)) == _module().TRUNCATE_AT
+
+
+def test_the_icons_twins_are_byte_equal() -> None:
+    """Fold F12 (lane A F5): the Lucide icon bodies have two carriers — the
+    generator stamps them into static rows and record pages, the wiring
+    clones them into on-demand rows; unequal twins render one row's icons
+    two ways. The JS keys are camelCase by design; the BODIES are pinned
+    byte-equal, and no icon may exist on one carrier only (the shared six;
+    the generator's chevron/copy/file extras are record-page-only and have
+    no JS twin)."""
+    module = _module()
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    chunk = js.split("var ICONS = {", 1)[1].split("\n};", 1)[0]
+    js_icons = dict(re.findall(r"([A-Za-z]+):\s*'([^']*)'", chunk))
+    assert js_icons, "the JS ICONS object did not parse"
+    name_map = {
+        "signature": "signature",
+        "circleDashed": "circle-dashed",
+        "globe": "globe",
+        "cpu": "cpu",
+        "drive": "hard-drive",
+        "alert": "triangle-alert",
+    }
+    assert set(js_icons) == set(name_map), (
+        f"an icon joined one carrier only: js={sorted(js_icons)}"
+    )
+    for js_name, py_name in name_map.items():
+        assert js_icons[js_name] == module.ICONS[py_name], (
+            f"the {py_name} icon twins drifted (JS key {js_name!r})"
+        )
 
 
 def test_short_uses_the_twin_constant() -> None:
@@ -539,35 +897,29 @@ def test_the_committed_template_its_index_and_the_page_agree() -> None:
         assert f'data-bw-package-id="{row["package_id"]}"' in page
 
 
-# ── fold R7/R10 (2026-10-02 round-2 refute) ───────────────────────────────────
+# ── fold R7/R10 (2026-10-02 round-2 refute; records-table follow-on) ──────────
 
 
-def test_card_release_links_pin_to_the_stamped_commit() -> None:
-    """R7 (critic F6): every card's release link points at the STAMPED
-    commit's tree, not `main` — the page's click-through must show the exact
-    bytes the page was generated from, matching its verifiability contract
-    (the footer says `generated from <sha>`; the links must not quietly
-    drift to whatever main holds today). The template's header nav link is
-    a browse link and stays on main by design."""
+def test_row_drill_anchors_point_at_relative_record_urls() -> None:
+    """R7/R10 (records-table form): the row's drill anchor is a RELATIVE
+    record-page URL (R10 — the page serves from a Pages subroot); the
+    stamped-commit pinning moves to the record pages' own links, whose arms
+    live in tests/test_catalogue_record.py. With htmx loaded the anchor also
+    carries the drill wiring; without JS it is a plain link."""
     page = _render(FIXTURE.read_bytes())
     cards = _cards(page)
-    assert cards, "precondition: default cards render"
+    assert cards, "precondition: default rows render"
     for card in cards:
-        href = re.search(r'data-bw-slot="evidence-link"\s+href="([^"]+)"', card)
-        assert href is not None, "a card carries no evidence link"
-        assert href.group(1).startswith(
-            f"https://github.com/madeinoz67/benchweave-registry/tree/{SHA}/releases/"
-        ), f"card link is not stamped-commit-pinned: {href.group(1)}"
-    # the JS twin builds the same pinned shape (ref read from the page's own
-    # stamp at runtime; 'main' remains only as the no-JS fallback)
-    js = PLUGINS_JS.read_text(encoding="utf-8")
-    assert "function releaseDirUrl(row, ref)" in js, (
-        "plugins.js releaseDirUrl lost its ref parameter"
-    )
-    assert "data-bw-stamp" in js, "the wiring no longer reads the page's stamp"
-    assert "'https://github.com/madeinoz67/benchweave-registry/tree/' + (ref" in js or (
-        "tree/' + (ref" in js
-    ), "the JS URL base no longer carries the ref"
+        anchor = re.search(r'<a class="release-name"[^>]*href="([^"]+)"', card)
+        assert anchor is not None, "a row carries no drill anchor"
+        url = anchor.group(1)
+        assert url.startswith("records/benchweave-registry/"), (
+            f"the drill anchor is not a relative record URL: {url}"
+        )
+        assert url.endswith("/index.html"), url
+        assert 'hx-select="#release-detail"' in card and "hx-push-url" in card
+        slug = re.search(r'hx-target="#(bw-detail-[a-z0-9-]+)"', card)
+        assert slug is not None, "the row carries no detail-host target"
 
 
 def test_no_root_absolute_urls_in_the_template_or_wiring() -> None:
@@ -582,3 +934,112 @@ def test_no_root_absolute_urls_in_the_template_or_wiring() -> None:
     ):
         for literal in ('src="/', 'href="/', "fetch('/", 'fetch("/'):
             assert literal not in text, f"{name} carries the root-absolute form {literal!r}"
+
+
+# ── page chrome: snapshot line, nav placeholders, theme switcher, htmx ────────
+
+
+def test_the_snapshot_line_carries_stamp_counts_and_publishers() -> None:
+    """§2.1: `snapshot <sha12>` (the stamp, short), `N shown of M` (the
+    default counts, statically; JS updates `shown` on filter), `P vetted`
+    (len(publishers)) — honest '0 vetted' on an empty registry."""
+    page = _render(FIXTURE.read_bytes(), publisher_count=2)
+    assert "<dt>snapshot</dt>" in page and f"<dd class=\"mono\">{SHA[:12]}</dd>" in page
+    assert 'data-bw-shown="6"' in page and ">6</span> shown of 11<" in page
+    assert "2 vetted" in page
+    bare = _render(FIXTURE.read_bytes())
+    assert "0 vetted" in bare, "the honest zero-publisher registry must render 0 vetted"
+
+
+def test_nav_placeholders_are_marked_non_links() -> None:
+    """§2.1: Publishers and Advisories are slice-4 surfaces and the
+    publication prose is maintainer-facing today — they render as muted
+    NON-LINKS (no href a static page cannot honor), aria-disabled, naming
+    the future surface; Catalogue is the only live link."""
+    template = _template()
+    catalogue = re.search(r"<nav[^>]*>(.*?)</nav>", template, re.DOTALL)
+    assert catalogue is not None, "the template lost its nav"
+    nav = catalogue.group(1)
+    assert 'href="#catalogue" aria-current="page"' in nav
+    for label in ("Publishers", "Advisories", "How publication works"):
+        entry = re.search(rf'<span class="nav-future"[^>]*>{label}</span>', nav)
+        assert entry is not None, f"{label} is not a marked non-link"
+        assert "href" not in entry.group(0), f"{label} carries an href"
+        assert 'aria-disabled="true"' in entry.group(0), f"{label} is not aria-disabled"
+        assert 'title="' in entry.group(0), f"{label} names no future surface"
+
+
+def test_the_theme_switcher_button_and_toggle_wiring_exist() -> None:
+    """§2.1: the header carries the switcher button (aria-labelled) and the
+    wiring toggles data-theme on the html element, persisted in localStorage
+    (the icon is the circle-free sun rewrite — see the honesty arms)."""
+    template = _template()
+    assert 'id="bw-theme-toggle"' in template and 'aria-label="Switch colour theme"' in template
+    js = PLUGINS_JS.read_text(encoding="utf-8")
+    assert "data-theme" in js and "localStorage" in js and "bw-theme" in js
+
+
+def test_htmx_is_served_same_origin_before_the_wiring_with_no_cdn() -> None:
+    """§2.5/B-S: the vendored htmx loads same-origin (assets/htmx.min.js),
+    BEFORE plugins.js; neither the template nor the wiring references any
+    CDN (the vendor is digest-pinned — tests/test_htmx_vendor.py)."""
+    template = _template()
+    htmx_at = template.find('src="assets/htmx.min.js"')
+    js_at = template.find('src="assets/plugins.js"')
+    assert htmx_at != -1 and js_at != -1 and htmx_at < js_at, (
+        "the template must load assets/htmx.min.js before assets/plugins.js"
+    )
+    for name, text in (
+        ("catalogue/index.template.html", template),
+        ("catalogue/assets/plugins.js", PLUGINS_JS.read_text(encoding="utf-8")),
+    ):
+        for host in ("unpkg.com", "cdn.jsdelivr", "cdnjs.cloudflare", "esm.sh"):
+            assert host not in text, f"{name} references the CDN host {host}"
+
+
+# ── the mark, both postures (§2.8 — ships DARK behind --registry-mark) ───────
+
+WORDMARK_BEGIN_MARKER = "<!-- bw:wordmark begin -->"
+WORDMARK_END_MARKER = "<!-- bw:wordmark end -->"
+
+
+def _vendored_mark_rects() -> list[str]:
+    guide = VENDORED_STYLEGUIDE.read_text(encoding="utf-8")
+    return re.findall(r'<rect [^>]*rx="0.85"[^>]*/>', guide)
+
+
+def test_the_unfired_posture_ships_no_mark_shapes() -> None:
+    """§2.8's unfired arm: the default render carries zero <rect> (no
+    stack-glyph bars), zero <circle>, and no Registry pill — the mark ships
+    dark pending the owner's word."""
+    page = _render(FIXTURE.read_bytes())
+    assert page.count("<rect") == 0, "the unfired render carries a stack-glyph shape"
+    assert "<circle" not in page, "a circle-bearing glyph rendered"
+    assert "mark-pill" not in page, "the Registry pill rendered unfired"
+    assert ">Registry<" not in page, "a Registry wordmark label rendered unfired"
+
+
+def test_the_fired_posture_pins_the_three_spec_rects_byte_exactly() -> None:
+    """§2.8's fired arm: --registry-mark renders the Registry variant —
+    exactly the vendored spec's three stack-glyph bars (byte-matched, never
+    retyped), inside the single header wordmark block, with the pill; the
+    circle ban still holds (the Standards tag glyph stays gated)."""
+    spec_rects = _vendored_mark_rects()
+    assert len(spec_rects) == 3, (
+        f"the vendored styleguide's Sub-brands grid carries {len(spec_rects)} "
+        "stack-glyph bars — the fired arm's spec moved; re-derive"
+    )
+    page = _render(FIXTURE.read_bytes(), registry_mark=True)
+    assert page.count("<rect") == 3, (
+        f"the fired render carries {page.count('<rect')} rect(s), expected exactly 3"
+    )
+    for rect in spec_rects:
+        assert rect in page, f"a spec bar is absent or retyped: {rect}"
+    assert ">Registry<" in page, "the fired wordmark lost its Registry pill"
+    assert "<circle" not in page, "the fired posture still bans the tag-glyph circle"
+    # all three bars sit inside the single header wordmark block
+    wordmark = page.split(WORDMARK_BEGIN_MARKER, 1)[1].split(WORDMARK_END_MARKER, 1)[0]
+    for rect in spec_rects:
+        assert rect in wordmark, "a spec bar rendered outside the wordmark block"
+    # the gateway weave is GONE in the fired variant (the mark replaces it)
+    assert "L17 7 L7 17" not in wordmark, "the fired wordmark kept the gateway weave"
