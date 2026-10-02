@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           uv run python scripts/generate_index.py
-          uv run python scripts/generate_catalogue_page.py --dest _site --sha "${GITHUB_SHA}"
+          uv run python scripts/generate_catalogue_page.py --dest _site --sha "${GITHUB_SHA}" --registry-mark
       - name: Browser verification of the generated artifact (B4')
         run: |
           set -euo pipefail
