@@ -1,0 +1,342 @@
+{
+  "comment": "Hand-derived search truth table for the issue #224 slice-2 catalogue (B1, CR-24). Derived by hand from plugins-index.fixture.json BEFORE any search code was written (C1 discipline). Every case names a dimension arm, the query, and the exactly-expected set of package ids (sorted). An empty query dimension means no filter on it. The truth is evaluated by tests/contract/run_search_spec.mjs against website/assets/plugins.js filterRows; internal consistency (expected ids exist in the fixture; every dimension covered; the negative and combined arms present) is pinned by tests/contract/test_website_plugins_search.py.",
+  "fixture": "plugins-index.fixture.json",
+  "cases": [
+    {
+      "id": "name-substring-case-insensitive",
+      "dimension": "name",
+      "query": {"text": "HARBORLINE"},
+      "expect": [
+        "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay",
+        "harborline-systems/harborline-relay16"
+      ]
+    },
+    {
+      "id": "name-display-substring",
+      "dimension": "name",
+      "query": {"text": "PSU"},
+      "expect": ["northwind-instruments/northwind-psu"]
+    },
+    {
+      "id": "name-summary-substring",
+      "dimension": "name",
+      "query": {"text": "snapshot profile"},
+      "expect": ["northwind-instruments/northwind-psu"]
+    },
+    {
+      "id": "name-package-prefix",
+      "dimension": "name",
+      "query": {"text": "northwind"},
+      "expect": [
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "name-shared-prefix-broad",
+      "dimension": "name",
+      "query": {"text": "relay"},
+      "expect": [
+        "harborline-systems/harborline-relay",
+        "harborline-systems/harborline-relay16"
+      ]
+    },
+    {
+      "id": "name-shared-prefix-disambiguation",
+      "dimension": "name",
+      "query": {"text": "relay16"},
+      "expect": ["harborline-systems/harborline-relay16"]
+    },
+    {
+      "id": "publisher-exact",
+      "dimension": "publisher",
+      "query": {"publisher": "copperleaf-labs"},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm"
+      ]
+    },
+    {
+      "id": "capability-network-egress",
+      "dimension": "capability",
+      "query": {"capabilities": ["network_egress"]},
+      "expect": [
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-relay",
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-psu"
+      ]
+    },
+    {
+      "id": "capability-subprocess-or-native-library",
+      "dimension": "capability",
+      "query": {"capabilities": ["subprocess_or_native_library"]},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay",
+        "northwind-instruments/northwind-load"
+      ]
+    },
+    {
+      "id": "capability-filesystem-writes",
+      "dimension": "capability",
+      "query": {"capabilities": ["filesystem_writes_beyond_evidence_retention"]},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-shunt",
+        "harborline-systems/harborline-relay",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "standard-stg-1-4",
+      "dimension": "standard_version",
+      "query": {"standard_version": "1.4"},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu"
+      ]
+    },
+    {
+      "id": "standard-stg-1-5",
+      "dimension": "standard_version",
+      "query": {"standard_version": "1.5"},
+      "expect": [
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "standard-otdp-0-2-2",
+      "dimension": "standard_version",
+      "query": {"standard_version": "0.2.2"},
+      "expect": [
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-relay",
+        "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-psu",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "standard-otdp-0-2-1",
+      "dimension": "standard_version",
+      "query": {"standard_version": "0.2.1"},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-shunt",
+        "harborline-systems/harborline-pwm",
+        "northwind-instruments/northwind-load"
+      ]
+    },
+    {
+      "id": "status-signature-signed-valid",
+      "dimension": "status",
+      "query": {"signature_state": "signed-valid"},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "status-signature-unsigned",
+      "dimension": "status",
+      "query": {"signature_state": "unsigned"},
+      "expect": [
+        "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay"
+      ]
+    },
+    {
+      "id": "status-maintenance-maintained",
+      "dimension": "status",
+      "query": {"maintenance": "maintained"},
+      "expect": [
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-relay",
+        "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu"
+      ]
+    },
+    {
+      "id": "status-maintenance-maintenance-only",
+      "dimension": "status",
+      "query": {"maintenance": "maintenance_only"},
+      "expect": ["northwind-instruments/northwind-scope"]
+    },
+    {
+      "id": "status-maintenance-unmaintained",
+      "dimension": "status",
+      "query": {"maintenance": "unmaintained"},
+      "expect": ["copperleaf-labs/copperleaf-daq"]
+    },
+    {
+      "id": "status-maintenance-unknown",
+      "dimension": "status",
+      "query": {"maintenance": "unknown"},
+      "expect": [
+        "copperleaf-labs/copperleaf-shunt",
+        "harborline-systems/harborline-pwm",
+        "northwind-instruments/northwind-fixture"
+      ]
+    },
+    {
+      "id": "status-advisories-present",
+      "dimension": "status",
+      "query": {"advisories": "present"},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "status-advisories-none",
+      "dimension": "status",
+      "query": {"advisories": "none"},
+      "expect": [
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay",
+        "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu"
+      ]
+    },
+    {
+      "id": "kind-admitted-release",
+      "dimension": "kind",
+      "query": {"kind": "admitted-release"},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-relay",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "kind-community-shared",
+      "dimension": "kind",
+      "query": {"kind": "community-shared"},
+      "expect": [
+        "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay16"
+      ]
+    },
+    {
+      "id": "kind-in-tree-fixture",
+      "dimension": "kind",
+      "query": {"kind": "in-tree-fixture"},
+      "expect": ["northwind-instruments/northwind-fixture"]
+    },
+    {
+      "id": "kind-all-reveals-tagged-non-default-rows",
+      "dimension": "kind",
+      "query": {"kind": "all"},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay",
+        "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "default-view-admitted-and-signed",
+      "dimension": "default",
+      "query": {"kind": "admitted-release", "signature_state": "signed-valid"},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "nonexistent-query-is-empty",
+      "dimension": "negative",
+      "query": {"text": "no such plugin name anywhere"},
+      "expect": []
+    },
+    {
+      "id": "combined-text-and-signature",
+      "dimension": "combined",
+      "query": {"text": "harborline", "signature_state": "signed-valid"},
+      "expect": ["harborline-systems/harborline-relay16"]
+    },
+    {
+      "id": "combined-publisher-standard-and-kind",
+      "dimension": "combined",
+      "query": {"publisher": "northwind-instruments", "standard_version": "1.4", "kind": "all"},
+      "expect": [
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu"
+      ]
+    },
+    {
+      "id": "sentinel-text-all-is-a-literal-query",
+      "dimension": "sentinel",
+      "query": {"text": "all"},
+      "expect": []
+    },
+    {
+      "id": "sentinel-text-empty-string-means-no-filter",
+      "dimension": "sentinel",
+      "query": {"text": ""},
+      "expect": [
+        "copperleaf-labs/copperleaf-daq",
+        "copperleaf-labs/copperleaf-shunt",
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay",
+        "harborline-systems/harborline-relay16",
+        "northwind-instruments/northwind-fixture",
+        "northwind-instruments/northwind-load",
+        "northwind-instruments/northwind-psu",
+        "northwind-instruments/northwind-scope"
+      ]
+    },
+    {
+      "id": "capability-and-two-capabilities",
+      "dimension": "capability",
+      "query": {"capabilities": ["network_egress", "subprocess_or_native_library"]},
+      "expect": [
+        "copperleaf-labs/copperleaf-therm",
+        "harborline-systems/harborline-relay"
+      ]
+    }
+  ]
+}

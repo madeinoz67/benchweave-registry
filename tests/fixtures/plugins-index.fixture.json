@@ -1,0 +1,403 @@
+{
+  "comment": "Synthetic 10-row catalogue fixture for the issue #224 slice-2 search truth (CR-24's own denominator). Invented names only. Rows are shaped exactly like the registry's generated index rows (records/index.schema.json) and sorted by package_id as the generator sorts. This file is search TEST DATA — it is not a registry of record and never renders on the site.",
+  "index_version": 1,
+  "generated_from": {
+    "records_tree": "records/",
+    "releases_tree": "releases/"
+  },
+  "rows": [
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "copperleaf-labs/copperleaf-daq",
+      "version": "1.2.0",
+      "kind": "admitted-release",
+      "publisher": "copperleaf-labs",
+      "manifest_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "signature_state": "signed-valid",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Copperleaf DAQ",
+      "summary": "Data acquisition board with streaming reads.",
+      "licence_spdx": "MIT",
+      "compatibility": {
+        "adapter_api_versions": ["1.1"],
+        "otdp_versions": ["0.2.1"],
+        "stg_versions": ["1.4"]
+      },
+      "evidence": [
+        {
+          "level": "structural",
+          "report_path": "evidence/streaming-evidence.md",
+          "result": "passed"
+        }
+      ],
+      "maintenance": "unmaintained",
+      "advisories": ["BW-ADV-002", "BW-ADV-003"],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": true,
+        "network_egress": false,
+        "subprocess_or_native_library": true
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000005",
+      "gateway_ref": "0000000000000000000000000000000000000005",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "copperleaf-labs/copperleaf-shunt",
+      "version": "2.0.1",
+      "kind": "admitted-release",
+      "publisher": "copperleaf-labs",
+      "manifest_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "signature_state": "signed-valid",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Copperleaf shunt",
+      "summary": "Precision shunt monitor.",
+      "licence_spdx": "Apache-2.0",
+      "compatibility": {
+        "adapter_api_versions": ["1.2"],
+        "otdp_versions": ["0.2.1"],
+        "stg_versions": ["1.5"]
+      },
+      "evidence": [
+        {
+          "level": "simulated",
+          "report_path": "evidence/shunt-evidence.md",
+          "result": "passed"
+        }
+      ],
+      "maintenance": "unknown",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": true,
+        "network_egress": true,
+        "subprocess_or_native_library": false
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000006",
+      "gateway_ref": "0000000000000000000000000000000000000006",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "copperleaf-labs/copperleaf-therm",
+      "version": "0.9.4",
+      "kind": "admitted-release",
+      "publisher": "copperleaf-labs",
+      "manifest_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "signature_state": "signed-valid",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Copperleaf thermal logger",
+      "summary": "Thermocouple logging over eight channels.",
+      "licence_spdx": "MIT",
+      "compatibility": {
+        "adapter_api_versions": ["1.2"],
+        "otdp_versions": ["0.2.2"],
+        "stg_versions": ["1.5"]
+      },
+      "evidence": [
+        {
+          "level": "simulated",
+          "report_path": "evidence/thermal-evidence.md",
+          "result": "passed"
+        }
+      ],
+      "maintenance": "maintained",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": false,
+        "network_egress": true,
+        "subprocess_or_native_library": true
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000004",
+      "gateway_ref": "0000000000000000000000000000000000000004",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "harborline-systems/harborline-pwm",
+      "version": "0.3.0",
+      "kind": "community-shared",
+      "publisher": "harborline-systems",
+      "manifest_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+      "signature_state": "unsigned",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Harborline PWM generator",
+      "summary": "Shared pulse-width generator.",
+      "licence_spdx": "BSD-3-Clause",
+      "compatibility": {
+        "adapter_api_versions": ["1.1"],
+        "otdp_versions": ["0.2.1"],
+        "stg_versions": ["1.5"]
+      },
+      "evidence": [],
+      "maintenance": "unknown",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": false,
+        "network_egress": false,
+        "subprocess_or_native_library": true
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000009",
+      "gateway_ref": "0000000000000000000000000000000000000009",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "harborline-systems/harborline-relay",
+      "version": "1.4.2",
+      "kind": "admitted-release",
+      "publisher": "harborline-systems",
+      "manifest_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "signature_state": "unsigned",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Harborline relay matrix",
+      "summary": "Sixteen-channel relay matrix.",
+      "licence_spdx": "MIT",
+      "compatibility": {
+        "adapter_api_versions": ["1.1"],
+        "otdp_versions": ["0.2.2"],
+        "stg_versions": ["1.5"]
+      },
+      "evidence": [],
+      "maintenance": "maintained",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": true,
+        "network_egress": true,
+        "subprocess_or_native_library": true
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000007",
+      "gateway_ref": "0000000000000000000000000000000000000007",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "harborline-systems/harborline-relay16",
+      "version": "1.4.2",
+      "kind": "community-shared",
+      "publisher": "harborline-systems",
+      "manifest_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+      "signature_state": "signed-valid",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Harborline relay sixteen",
+      "summary": "Shared relay build with sixteen channels.",
+      "licence_spdx": "BSD-3-Clause",
+      "compatibility": {
+        "adapter_api_versions": ["1.2"],
+        "otdp_versions": ["0.2.2"],
+        "stg_versions": ["1.4"]
+      },
+      "evidence": [
+        {
+          "level": "simulated",
+          "report_path": "evidence/relay16-evidence.md",
+          "result": "partial"
+        }
+      ],
+      "maintenance": "maintained",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": false,
+        "network_egress": false,
+        "subprocess_or_native_library": false
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000008",
+      "gateway_ref": "0000000000000000000000000000000000000008",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof",
+        "community-shared-not-vetted"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "northwind-instruments/northwind-fixture",
+      "version": "0.0.1",
+      "kind": "in-tree-fixture",
+      "publisher": "northwind-instruments",
+      "manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "signature_state": "signed-valid",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Northwind fixture tool",
+      "summary": "In-tree fixture for the bench topology.",
+      "licence_spdx": "MIT",
+      "compatibility": {
+        "adapter_api_versions": ["1.2"],
+        "otdp_versions": ["0.2.2"],
+        "stg_versions": ["1.4"]
+      },
+      "evidence": [
+        {
+          "level": "simulated",
+          "report_path": "evidence/fixture-evidence.md",
+          "result": "passed"
+        }
+      ],
+      "maintenance": "unknown",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": false,
+        "network_egress": true,
+        "subprocess_or_native_library": false
+      },
+      "transport_triples": [],
+      "source_revision": "000000000000000000000000000000000000000a",
+      "gateway_ref": "000000000000000000000000000000000000000a",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "northwind-instruments/northwind-load",
+      "version": "3.1.0",
+      "kind": "admitted-release",
+      "publisher": "northwind-instruments",
+      "manifest_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signature_state": "signed-valid",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Northwind load bank",
+      "summary": "Programmable load for discharge tests.",
+      "licence_spdx": "MIT",
+      "compatibility": {
+        "adapter_api_versions": ["1.2"],
+        "otdp_versions": ["0.2.1"],
+        "stg_versions": ["1.4"]
+      },
+      "evidence": [],
+      "maintenance": "maintained",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": false,
+        "network_egress": false,
+        "subprocess_or_native_library": true
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000002",
+      "gateway_ref": "0000000000000000000000000000000000000002",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "northwind-instruments/northwind-psu",
+      "version": "0.1.0",
+      "kind": "admitted-release",
+      "publisher": "northwind-instruments",
+      "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "signature_state": "signed-valid",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Northwind PSU driver",
+      "summary": "Bench power supply driver with scalar reads and a snapshot profile.",
+      "licence_spdx": "MIT",
+      "compatibility": {
+        "adapter_api_versions": ["1.1"],
+        "otdp_versions": ["0.2.2"],
+        "stg_versions": ["1.4"]
+      },
+      "evidence": [
+        {
+          "level": "simulated",
+          "report_path": "evidence/protocol-evidence.md",
+          "result": "passed"
+        }
+      ],
+      "maintenance": "maintained",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": false,
+        "network_egress": true,
+        "subprocess_or_native_library": false
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000001",
+      "gateway_ref": "0000000000000000000000000000000000000001",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "northwind-instruments/northwind-scope",
+      "version": "2.2.2",
+      "kind": "admitted-release",
+      "publisher": "northwind-instruments",
+      "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "signature_state": "signed-valid",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Northwind scope",
+      "summary": "Four-channel scope with persistence mode.",
+      "licence_spdx": "GPL-3.0-only",
+      "compatibility": {
+        "adapter_api_versions": ["1.1"],
+        "otdp_versions": ["0.2.2"],
+        "stg_versions": ["1.5"]
+      },
+      "evidence": [
+        {
+          "level": "simulated",
+          "report_path": "evidence/scope-evidence.md",
+          "result": "partial"
+        }
+      ],
+      "maintenance": "maintenance_only",
+      "advisories": ["BW-ADV-001"],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": true,
+        "network_egress": false,
+        "subprocess_or_native_library": false
+      },
+      "transport_triples": [],
+      "source_revision": "0000000000000000000000000000000000000003",
+      "gateway_ref": "0000000000000000000000000000000000000003",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
+      ]
+    }
+  ]
+}
