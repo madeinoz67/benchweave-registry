@@ -130,6 +130,32 @@ def _edit_distance(left: str, right: str) -> int:
     return previous[-1]
 
 
+def _segment_prefix_names(name: str, params: dict[str, Any]) -> list[str]:
+    """The skeletons of name's separator-delimited PREFIX SPANS (fold B6).
+
+    Containment is delimiter-bounded (coordinator ruling): a claim on an
+    existing name is the existing name followed by a SEPARATOR (or exact
+    equality) — ``otdp-tools`` claims ``otdp``, ``dev-tools-inc`` claims
+    ``dev``, but ``devlin-instruments`` merely begins with the letters and
+    claims nothing. Prefix spans keep multi-token names whole: ``sim-psu``
+    is claimed by ``sim-psu-labs`` (span "sim-psu" + separator).
+    """
+    separators = params.get("separator_characters", ("-", "_", ".", "/"))
+    spans: list[str] = []
+    tokens: list[str] = []
+    token = ""
+    for char in str(name):
+        if char in separators:
+            tokens.append(token)
+            token = ""
+            spans.append("-".join(tokens))
+        else:
+            token += char
+    tokens.append(token)
+    spans.append("-".join(tokens))
+    return [_skeleton(span, params) for span in spans if span]
+
+
 def namespace_verdict(
     candidate: str, existing: str, *, reserved: bool, rules: dict[str, Any]
 ) -> str:
@@ -152,10 +178,15 @@ def namespace_verdict(
     left, right = _skeleton(candidate, params), _skeleton(existing, params)
     if left == right:
         return "same"
+    # Fold B6: delimiter-bounded containment — the other name's skeleton is
+    # one of this name's separator-delimited prefix spans (the full-equality
+    # case returned "same" above).
+    candidate_spans = _segment_prefix_names(candidate, params)
+    existing_spans = _segment_prefix_names(existing, params)
     near = (
         _edit_distance(left, right) <= int(params.get("max_edit_distance", 2))
-        or left.startswith(right)
-        or right.startswith(left)
+        or right in candidate_spans
+        or left in existing_spans
     )
     if not near:
         return "distinct"
@@ -353,13 +384,26 @@ def _seq_uniqueness_findings(parsed_by_path: dict[Path, dict[str, Any]]) -> list
 
 
 def record_paths(records_dir: Path) -> list[Path]:
-    """Every committed record file, sorted (submissions and lifecycle)."""
-    return sorted(
-        path
-        for sub in ("submissions", "lifecycle")
-        for path in (records_dir / sub).rglob("*.json")
-        if path.is_file()
-    )
+    """Every committed record file, sorted (submissions and lifecycle).
+
+    Fold C2 (named exclusion, coordinator ruling): ``artefacts/`` subtrees
+    under ``records/submissions/`` are submission PAYLOAD staged by the
+    submit flow and read by the index generator — a document class the
+    records-validity gate does not judge. Without the exclusion every
+    genuine submission PR was red by construction (the artefact JSON is not
+    a record); with it, real records still require their authorities
+    (the fail-closed census is pinned by test, not weakened).
+    """
+    collected: list[Path] = []
+    for sub in ("submissions", "lifecycle"):
+        for path in (records_dir / sub).rglob("*.json"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(records_dir).parts
+            if sub == "submissions" and "artefacts" in relative[1:]:
+                continue
+            collected.append(path)
+    return sorted(collected)
 
 
 def closure_digest_of_dependencies(dependencies: list[dict[str, Any]]) -> str:
@@ -395,10 +439,25 @@ def validate_record(raw: bytes, path: Path) -> tuple[list[str], dict[str, Any] |
     return findings, parsed
 
 
+def _record_order(path: Path) -> tuple[str, int, str]:
+    """Numeric-aware record ordering (fold A2): filenames carry a sequence
+    (``review-10`` / ``2-publish``) and lexicographic order is WRONG for
+    two-digit sequences (``review-10`` sorts before ``review-9``)."""
+    match = re.search(r"(\d+)", path.stem)
+    return (str(path.parent), int(match.group(1)) if match else 0, path.name)
+
+
 def _review_records(parsed_by_path: dict[Path, dict[str, Any]]) -> dict[tuple[str, str, str], Path]:
-    """Map (publisher, plugin, version) -> the accepted review record's path."""
+    """Map (publisher, plugin, version) -> the LATEST review record's path.
+
+    Fold A2: latest = highest numeric filename sequence, not last
+    lexicographic write — the pre-existing wound silently governed by the
+    older review whenever a submission passed nine reviews.
+    """
     reviews: dict[tuple[str, str, str], Path] = {}
-    for path, parsed in parsed_by_path.items():
+    for path, parsed in sorted(
+        parsed_by_path.items(), key=lambda item: _record_order(item[0])
+    ):
         if parsed.get("record_type") != "review":
             continue
         review = parsed.get("review", {})
@@ -511,6 +570,7 @@ def validate_tree(root: Path) -> list[str]:
 
     publish_keys: set[tuple[str, str, str]] = set()
     yank_keys: set[tuple[str, str, str]] = set()
+    advisory_ids: dict[tuple[str, str, str], set[str]] = {}
     # Fold row 2 (two-pass): the per-record arms compare against keys drawn
     # from ALL records, but paths sort lexicographically — "10-withdraw.json"
     # sorts BEFORE "2-publish.json" — so a single mid-pass evaluation saw a
@@ -529,6 +589,10 @@ def validate_tree(root: Path) -> list[str]:
             publish_keys.add(collect_key)
         elif lifecycle.get("op") in ("yank", "takedown"):
             yank_keys.add(collect_key)
+        if lifecycle.get("op") == "advisory":
+            advisory = lifecycle.get("advisory", {})
+            if isinstance(advisory, dict) and advisory.get("id"):
+                advisory_ids.setdefault(collect_key, set()).add(str(advisory["id"]))
 
     for path, parsed in parsed_by_path.items():
         # CR-35's index half: no dev-prefixed registry id in any record.
@@ -546,12 +610,45 @@ def validate_tree(root: Path) -> list[str]:
         if parsed.get("record_type") != "lifecycle":
             continue
         lifecycle = parsed.get("lifecycle", {})
-        # CR-16's records half: reserved plugin names never reach a record.
-        if lifecycle.get("plugin") in _reserved_plugins(root):
-            findings.append(
-                f"namespace_reserved:{path.name}: plugin "
-                f"{lifecycle.get('plugin')} is reserved (lane-rules.json)"
-            )
+        # Fold B5 (path<->block agreement): the record's DIRECTORY names the
+        # submission it belongs to; a block claiming another identity is a
+        # record filed where no reader will look for it.
+        relative = path.relative_to(records_dir).parts
+        if len(relative) == 5 and relative[0] in ("submissions", "lifecycle"):
+            block = parsed.get("review", {}) if relative[0] == "submissions" else lifecycle
+            if isinstance(block, dict) and (
+                block.get("publisher"),
+                block.get("plugin"),
+                block.get("version"),
+            ) != (relative[1], relative[2], relative[3]):
+                findings.append(
+                    f"record_path_mismatch:{path.name}: filed at "
+                    f"{'/'.join(relative[:-1])}, claims "
+                    f"{block.get('publisher')}/{block.get('plugin')}@{block.get('version')}"
+                )
+        # CR-16's records half + fold C1: reserved plugin names never reach a
+        # record, under the SAME near-aware predicate as the namespace arm —
+        # '5im-psu' skeleton-folds exactly onto reserved 'sim-psu' and
+        # 'sim-psu-labs' is the delimiter-bounded extension; exact matches
+        # refuse as before.
+        plugin = lifecycle.get("plugin")
+        plugin_rules = _lane_rules(root)
+        reserved_plugin = False
+        if isinstance(plugin, str) and plugin_rules is not None:
+            for name in sorted(
+                plugin_rules.get("namespace_rules", {}).get("reserved_plugins", ())
+            ):
+                if namespace_verdict(
+                    plugin, name, reserved=True, rules=plugin_rules
+                ) in ("same", "reserved"):
+                    findings.append(
+                        f"namespace_reserved:{path.name}: plugin {plugin} is "
+                        f"reserved (near {name}, lane-rules.json)"
+                    )
+                    reserved_plugin = True
+                    break
+        if reserved_plugin:
+            continue
         key = (
             lifecycle.get("publisher"),
             lifecycle.get("plugin"),
@@ -700,6 +797,22 @@ def validate_tree(root: Path) -> list[str]:
                 f"served status says {status.get('lifecycle')} but no yank|takedown "
                 "record governs it"
             )
+
+    # Fold B2: the advisory pairing's reverse direction — every advisory the
+    # served status carries must have the advisory record that appended it.
+    for key, status in status_docs.items():
+        if not isinstance(status, dict):
+            continue
+        for served in status.get("advisories", ()):
+            if not isinstance(served, dict):
+                continue
+            served_id = served.get("id")
+            if served_id and served_id not in advisory_ids.get(key, set()):
+                findings.append(
+                    f"status_advisory_unrecorded:{'/'.join(str(k) for k in key)}: "
+                    f"the served status carries advisory {served_id!r} with no "
+                    "advisory record"
+                )
     return findings
 
 

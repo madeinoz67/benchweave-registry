@@ -85,9 +85,19 @@ remains admissible; CR-32/E4).
 The records and the served state cannot diverge silently (records CI):
 a yank record without a governing `yanked`/`revoked` status refuses
 (`yank_status_absent:`), a yanked status with no yank record refuses
-(`status_yank_unrecorded:`), the record's `status_sequence` must equal the
-served sequence, and an advisory record must appear in the served status's
-`advisories[]`.
+(`status_yank_unrecorded:`), the record's `status_sequence` must not
+exceed the served sequence (ordering — later rewrites do not invalidate
+historical records), an advisory record must appear in the served
+status's `advisories[]`, and a served advisory with no record refuses
+(`status_advisory_unrecorded:`).
+
+**Document classes under `records/` (the named exclusion).** Only record
+files are validity-gated. `artefacts/` subtrees under
+`records/submissions/` are submission payload staged by the submit flow
+and read by the index generator — a different document class the records
+gate does not judge. The exclusion is a class boundary, not a vacuity
+hole: real records still require their authority files
+(`authority_absent:` refuses).
 
 **Where the dogfooded release stands (honest interim state).** The baseline
 `status.json` (sequence 1, `published`) is committed; the origin root is
@@ -96,8 +106,11 @@ NOT. The lane signing key was removed by the registry-never-signes ruling
 maintainer mints a new origin root keypair out-of-band: the PUBLIC half
 commits as `keys/main.pub.pem`, the private half never enters any
 repository, and it signs the status bytes verbatim as `status.sig`. Until
-that lands, `replay_admission.py` reports the typed finding
-`status_signature_absent` — the honest read, not a silent pass. The
+that lands, `replay_admission.py` reports typed findings with their
+conditions: `origin_root_absent` while the origin public root is
+uncommitted (the current state — this fires first), and
+`status_signature_absent` once the root exists but a served status pair
+lacks its signature. The honest read, not a silent pass. The
 signature topology the lane rules out: the committed `manifest.sig` is the
 publisher's signature over `submission-manifest.json` (R1, issue #225), so
 a full `required`-policy resolve of this origin is impossible by design;

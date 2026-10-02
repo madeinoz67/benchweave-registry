@@ -292,7 +292,8 @@ def test_similarity_vectors_are_pinned_by_the_truth_table() -> None:
     vectors = rules["similarity_rule"]["vectors"]
     table = json.loads((FIXTURES / "namespace-vetting.truth-table.json").read_bytes())
     inputs = {row["input"] for row in table["rows"] if row["surface"] == "similarity-rule"}
-    assert len(inputs) == len(vectors) == 7  # five at v1; sim-v6/sim-v7 fold-added
+    # five at v1; sim-v6/v7 fold-added; sim-v8..v11 supplement folds
+    assert len(inputs) == len(vectors) == 11
 
 
 # ── gate arms: the tree-level validity checks (design §2.4) ───────────────────
@@ -324,19 +325,19 @@ def _plant(root: Path, record: dict[str, Any], seq: int = 1) -> None:
 
 
 def _release(root: Path, publisher: str, plugin: str, version: str,
-             status: dict[str, Any] | None = None) -> Path:
+             status: dict[str, Any] | None = None,
+             review_block: dict[str, Any] | None = None) -> Path:
     release = root / "releases" / "benchweave-registry" / publisher / plugin / version
     release.mkdir(parents=True, exist_ok=True)
-    (release / "manifest.json").write_bytes(
-        vr.canonical_bytes(
-            {
-                "registry_id": "benchweave-registry",
-                "package_id": f"{publisher}/{plugin}",
-                "version": version,
-                "publisher_id": publisher,
-            }
-        )
-    )
+    manifest: dict[str, Any] = {
+        "registry_id": "benchweave-registry",
+        "package_id": f"{publisher}/{plugin}",
+        "version": version,
+        "publisher_id": publisher,
+    }
+    if review_block is not None:
+        manifest["review"] = review_block
+    (release / "manifest.json").write_bytes(vr.canonical_bytes(manifest))
     if status is not None:
         (release / "status.json").write_bytes(vr.canonical_bytes(status))
     return release
@@ -643,7 +644,7 @@ def test_similarity_vectors_hold_under_the_committed_rule() -> None:
     5 added the skeleton-equal confusable and a containment cell (seven)."""
     rules = json.loads((REPO / "lane-rules.json").read_bytes())
     vectors = rules["similarity_rule"]["vectors"]
-    assert len(vectors) == 7, [v["candidate"] for v in vectors]
+    assert len(vectors) == 11, [v["candidate"] for v in vectors]
     table = json.loads((FIXTURES / "namespace-vetting.truth-table.json").read_bytes())
     rows = {row["input"]: row for row in table["rows"]
             if row["surface"] == "similarity-rule"}
@@ -715,3 +716,182 @@ def test_committed_and_fixture_publishers_carry_the_equality() -> None:
     for document in (committed, fixture):
         for entry in document["publishers"]:
             assert entry["publisher_id"] == entry["namespace"], entry
+
+
+# ── supplement rows (adversary lanes A/B + reviewer): RED-first ───────────────
+
+
+def test_latest_review_resolves_by_numeric_sequence(tmp_path: Path) -> None:
+    """A2: review-10.json sorts BEFORE review-9.json lexicographically —
+    the last-write-wins resolution picked the OLDER review. The seq-10
+    review must govern (the manifest block pins it, and the tree is clean
+    only under the numeric reading)."""
+    root = _gate_tree(tmp_path)
+    # governed-by-10 chain: review-9 changes-requested, review-10 accepted,
+    # publish record + manifest review block pin review-10.
+    closure = vr.closure_digest_of_dependencies([])
+    older = review_record(
+        publisher="northwind-instruments", plugin="epsilon-probe", version="1.0.0"
+    )
+    older["review"]["outcome"] = "changes-requested"
+    older["review"]["cited_failures"] = ["P-03"]
+    older["review"]["closure_digest"] = closure
+    newer = review_record(
+        publisher="northwind-instruments", plugin="epsilon-probe", version="1.0.0"
+    )
+    newer["review"]["closure_digest"] = closure
+    target = root / "records" / "submissions" / "northwind-instruments" / "epsilon-probe" / "1.0.0"
+    target.mkdir(parents=True)
+    (target / "review-9.json").write_bytes(vr.canonical_bytes(older))
+    (target / "review-10.json").write_bytes(vr.canonical_bytes(newer))
+    release = _release(
+        root, "northwind-instruments", "epsilon-probe", "1.0.0",
+        review_block={"record_sha256": vr.sha256_hex(vr.canonical_bytes(newer)),
+                      "outcome": "accepted"},
+    )
+    publish = publish_record(
+        publisher="northwind-instruments", plugin="epsilon-probe", version="1.0.0"
+    )
+    publish["record_version"] = "1.1.0"
+    publish["lifecycle"]["closure_digest"] = closure
+    publish["lifecycle"]["release_manifest_sha256"] = vr.sha256_hex(
+        (release / "manifest.json").read_bytes()
+    )
+    _plant(root, publish, seq=1)
+    findings = _findings(root)
+    assert findings == [], findings
+
+
+def test_advisory_in_status_without_a_record_refuses(tmp_path: Path) -> None:
+    """B2: the advisory pairing is bidirectional — a served advisory with no
+    advisory record is the silent divergence §2.3 refuses in EITHER
+    direction (the yank direction already refused)."""
+    root = _gate_tree(tmp_path)
+    _release(root, "northwind-instruments", "alpha-tool", "1.0.0",
+             status={"lifecycle": "published", "sequence": 2, "advisories": [
+                 {"id": "BW-ADV-001", "severity": "medium",
+                  "summary": "s", "url": "https://example.invalid/b"}
+             ]})
+    findings = _findings(root)
+    assert any(f.startswith("status_advisory_unrecorded:") for f in findings), findings
+
+
+def test_record_filed_at_a_misleading_path_refuses(tmp_path: Path) -> None:
+    """B5: path<->block agreement — a record's directory names the
+    submission it belongs to; a block claiming another identity refuses."""
+    root = _gate_tree(tmp_path)
+    record = lifecycle_record(
+        "withdraw", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
+    )
+    target = root / "records" / "lifecycle" / "northwind-instruments" / "beta-tool" / "1.0.0"
+    target.mkdir(parents=True)
+    (target / "5-withdraw.json").write_bytes(vr.canonical_bytes(record))
+    findings = _findings(root)
+    assert any(f.startswith("record_path_mismatch:") for f in findings), findings
+
+
+def test_reserved_plugin_near_shapes_refuse(tmp_path: Path) -> None:
+    """C1: the reserved-plugin arm gets the same near-aware predicate as the
+    namespace arm — '5im-psu' skeleton-folds exactly onto reserved
+    'sim-psu' (the strongest impersonation shape), 'sim-psu-labs' is the
+    delimiter-bounded extension. Both refused end-to-end."""
+    for plugin in ("5im-psu", "sim-psu-labs"):
+        root = _gate_tree(tmp_path / plugin)
+        record = publish_record(publisher="northwind-instruments", plugin=plugin)
+        record["record_version"] = "1.1.0"
+        _plant(root, record)
+        findings = _findings(root)
+        assert any(
+            f.startswith("namespace_reserved:") and plugin in f for f in findings
+        ), (plugin, findings)
+
+
+def test_reserved_prefix_boundary_is_delimiter_bounded() -> None:
+    """B6: containment means the reserved token followed by a SEPARATOR (or
+    exact/skeleton-equal) — dev-tools-inc claims 'dev'; devlin-instruments
+    merely begins with the letters and passes the reserved set."""
+    rules = json.loads((REPO / "lane-rules.json").read_bytes())
+    assert vr.namespace_verdict(
+        "dev-tools-inc", "dev", reserved=True, rules=rules
+    ) == "reserved"
+    assert vr.namespace_verdict(
+        "devlin-instruments", "dev", reserved=True, rules=rules
+    ) == "distinct"
+
+
+def test_submission_artefacts_are_payload_not_records(tmp_path: Path) -> None:
+    """C2: the named exclusion — artefacts/ subtrees under
+    records/submissions/ are submission payload (the submit flow stages
+    them; the index generator reads them), never validity-gated records."""
+    root = _gate_tree(tmp_path)
+    artefacts = (
+        root / "records" / "submissions" / "northwind-instruments" / "delta-tool"
+        / "1.0.0" / "artefacts"
+    )
+    artefacts.mkdir(parents=True)
+    (artefacts / "submission.json").write_bytes(
+        vr.canonical_bytes({"submission_version": "0.1.1", "entries": []})
+    )
+    _plant(root, lifecycle_record(
+        "withdraw", publisher="northwind-instruments", plugin="delta-tool", version="1.0.0",
+    ))
+    findings = _findings(root)
+    assert findings == [], findings
+
+
+def test_artefacts_exclusion_does_not_disarm_the_authority_census(tmp_path: Path) -> None:
+    """C2's pin: the exclusion is a document-class boundary, not a vacuity
+    hole — real records still require their authorities with artefacts
+    present."""
+    root = _gate_tree(tmp_path)
+    (root / "records" / "publishers.json").unlink()
+    (root / "lane-rules.json").unlink()
+    artefacts = (
+        root / "records" / "submissions" / "northwind-instruments" / "delta-tool"
+        / "1.0.0" / "artefacts"
+    )
+    artefacts.mkdir(parents=True)
+    (artefacts / "submission.json").write_bytes(b'{"submission_version": "0.1.1"}\n')
+    _plant(root, lifecycle_record(
+        "withdraw", publisher="northwind-instruments", plugin="delta-tool", version="1.0.0",
+    ))
+    findings = _findings(root)
+    assert any(f.startswith("authority_absent:") for f in findings), findings
+
+
+# --- B3: the PR-state fixture matches the SDK queue normalizer's contract -----
+
+
+def test_pr_state_fixture_maps_every_truth_table_submission() -> None:
+    """B3: the fixture drives the SDK queue's normalizer — submission keys
+    derive from the records/submissions/<p>/<x>/<v>/ file paths, manifest.sig
+    detection from path basenames, states/reviews lowercase gh vocabulary."""
+    import re as _re
+
+    payload = json.loads((FIXTURES / "pr-state.json").read_bytes())
+    assert isinstance(payload.get("prs"), list) and len(payload["prs"]) == 8
+    pattern = _re.compile(
+        r"^records/submissions/([a-z0-9][a-z0-9-]*)/([a-z0-9][a-z0-9_-]*)/"
+        r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)/"
+    )
+    mapped: set[tuple[str, str, str]] = set()
+    for entry in payload["prs"]:
+        assert entry["state"] in {"open", "closed", "merged"}, entry
+        for review in entry["reviews"]:
+            assert isinstance(review, str) and review.islower(), entry
+        assert entry["files"], "every PR must carry at least one submission path"
+        for path in entry["files"]:
+            match = pattern.match(path)
+            assert match is not None, path
+            mapped.add(
+                (
+                    match.group(1),
+                    match.group(2),
+                    f"{match.group(3)}.{match.group(4)}.{match.group(5)}",
+                )
+            )
+    table = json.loads((FIXTURES / "queue-truth-table.json").read_bytes())
+    expected = {
+        (row["publisher"], row["plugin"], row["version"]) for row in table["rows"]
+    }
+    assert mapped == expected, (mapped ^ expected)

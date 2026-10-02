@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+REPO = Path(__file__).resolve().parents[1]
 import verify as V  # noqa: E402
 
 
@@ -79,3 +81,29 @@ def test_chain_output_prints_the_timeline(
     assert V.main([str(sandbox)]) == 0
     out = capsys.readouterr().out
     assert "lifecycle=publish" in out, out
+
+
+def test_cli_argv_routes_to_the_given_tree(tmp_path: Path) -> None:
+    """B1 (lane B F3): the CLI entry dropped argv entirely — a bare
+    `python scripts/verify.py <path>` always validated the script's own
+    repo and exited 0. Against a TAMPERED tree the CLI must exit 1 (the
+    #146 class: a green read of the wrong tree)."""
+    import subprocess
+    import sys as _sys
+
+    sandbox = _sandbox(tmp_path)
+    signed = (
+        sandbox / "releases/benchweave-registry/madeinoz67/dps150/0.1.0"
+        / "submission-manifest.json"
+    )
+    raw = signed.read_bytes()
+    signed.write_bytes(raw[:-2] + b"x\n" if raw.endswith(b"\n") else raw + b"x")
+    result = subprocess.run(
+        [_sys.executable, str(REPO / "scripts" / "verify.py"), str(sandbox)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1, (
+        f"the CLI green-read the WRONG tree (argv dropped):\n{result.stdout}"
+    )

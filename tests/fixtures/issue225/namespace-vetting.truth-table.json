@@ -1,5 +1,5 @@
 {
-  "note": "Hand-derived BEFORE any gate code (design \u00a75 ordering law; v1). Version 2 is the fold-wave table-defect repair (2026-10-02 coordinator directive, revw[2]+critic findings): row lc-06's equality pin is repaired to ORDERING \u2014 \u00a72.3's own intent text is 'mirroring exactly what the resolver enforces', and the resolver's check_status is a high-water ordering refusal, never equality \u2014 and lc-07 pins the yank-then-advise tree that equality refused forever. sim-v6/sim-v7 carry the two fold-added committed vectors (byte-identical rows land in the SDK twin). Each similarity row's expected label types the comparison set it exercises \u2014 'reserved' rows run against reserved_namespaces, 'lookalike'/'distinct'/'same' rows against the vetted-namespace comparison.",
+  "note": "Hand-derived BEFORE any gate code (design \u00a75 ordering law; v1). v2: fold-wave table-defect repair - lc-06 equality->ordering (\u00a72.3's intent text mirrors the resolver's high-water ORDERING refusal), lc-07 pins yank-then-advise. v3: supplement folds - ns-07 re-typed to the vetting surface (records-side package-id ownership follows namespace ownership structurally - the C5 disclosure - so the only producing collision shape is the vetting-time namespace claim; a records-gate row promising that finding was unreachable), sim-v8..v11 carry the B6 reserved-prefix boundary vectors and the C1 reserved-plugin shapes (byte-identical rows in the SDK twin). Each similarity row's comparison_set names the set it runs against; expected names the outcome (a 'distinct' verdict against the reserved set documents a name that PASSES the reserved check).",
   "rows": [
     {
       "comparison_set": "vetted",
@@ -75,8 +75,8 @@
     {
       "expected_finding": "namespace_collision:",
       "id": "ns-07",
-      "input": "publisher B's publish record claiming A's published package id",
-      "surface": "records-gate"
+      "input": "publisher B's publishers.json entry claiming A's namespace (the only structurally reachable collision shape - records-side package-id ownership follows namespace ownership; re-typed from records-gate, which no input could produce)",
+      "surface": "vetting-gate"
     },
     {
       "expected_finding": "vetting_row_unknown:",
@@ -193,7 +193,35 @@
       "input": "madeinoz67-labs vs madeinoz67 (skeleton containment of a vetted namespace)",
       "expected": "lookalike",
       "comparison_set": "vetted"
+    },
+    {
+      "id": "sim-v8",
+      "surface": "similarity-rule",
+      "input": "dev-tools-inc vs dev (reserved token + separator + suffix)",
+      "expected": "reserved",
+      "comparison_set": "reserved"
+    },
+    {
+      "id": "sim-v9",
+      "surface": "similarity-rule",
+      "input": "devlin-instruments vs dev (begins with the letters, no delimiter after the token)",
+      "expected": "distinct",
+      "comparison_set": "reserved"
+    },
+    {
+      "id": "sim-v10",
+      "surface": "similarity-rule",
+      "input": "5im-psu vs sim-psu (skeleton-equal via the confusable map, 5->s)",
+      "expected": "same",
+      "comparison_set": "reserved"
+    },
+    {
+      "id": "sim-v11",
+      "surface": "similarity-rule",
+      "input": "sim-psu-labs vs sim-psu (delimiter-bounded extension of a reserved plugin name)",
+      "expected": "reserved",
+      "comparison_set": "reserved"
     }
   ],
-  "table_version": 2
+  "table_version": 3
 }
