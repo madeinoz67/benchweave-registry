@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release record — BenchWeave Registry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Up-prefix: the record page sits five directories below the site root
+     (records/<registry_id>/<publisher>/<plugin>/<version>/), so every asset
+     resolves through ../../../../../ — computed by the generator, pinned by
+     tests (R10). -->
+<link rel="stylesheet" href="../../../../../assets/catalogue.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+  <!-- bw:wordmark begin -->
+  <a class="wordmark" href="../../../../../index.html">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z" stroke="var(--amber-solid)" stroke-width="1.6"/>
+      <path d="M7 7 L10.6 10.6 A2 2 0 0 1 13.4 13.4 L17 17" stroke="var(--amber-solid)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M17 7 L7 17" stroke="var(--blue-solid)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span>BenchWeave</span>
+  </a>
+  <!-- bw:wordmark end -->
+  <nav class="site-nav" aria-label="Registry">
+    <a href="../../../../../index.html">Catalogue</a>
+    <span class="nav-future" aria-disabled="true" title="Publishers arrives with slice 4 (gateway issue #226)">Publishers</span>
+    <span class="nav-future" aria-disabled="true" title="Advisories arrives with slice 4 (gateway issue #226)">Advisories</span>
+    <span class="nav-future" aria-disabled="true" title="User-facing publication prose is deferred (D-S2m)">How publication works</span>
+  </nav>
+  <div class="top-tools">
+    <a class="repo-link" href="https://github.com/madeinoz67/benchweave-registry">Repository of record
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    <button type="button" id="bw-theme-toggle" class="theme-toggle" aria-label="Switch colour theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12a4 4 0 1 0 8 0 4 4 0 1 0-8 0"></path><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+    </button>
+  </div>
+  </div>
+</header>
+
+<main id="release-detail">
+<!-- bw:record begin -->
+<!-- bw:record end -->
+</main>
+
+<footer class="page-foot">
+  <p class="catalogue-meta">Rendered view of the <a href="https://github.com/madeinoz67/benchweave-registry">registry repository of record</a>. There is no hosted registry service.</p>
+  <p class="catalogue-meta mono"><!-- bw:provenance --></p>
+</footer>
+
+<!-- Record pages load NO external JS (§2.9/B-S): one minimal inline script —
+     the theme toggle (the catalogue twin) and the digest copy buttons
+     (navigator.clipboard, graceful no-op). -->
+<script>
+(function () {
+  var button = document.getElementById('bw-theme-toggle');
+  try {
+    var stored = localStorage.getItem('bw-theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  } catch (err) { /* storage unavailable — the media default stands */ }
+  if (button) {
+    button.addEventListener('click', function () {
+      var root = document.documentElement;
+      var current =
+        root.getAttribute('data-theme') ||
+        (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light');
+      var next = current === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('bw-theme', next); } catch (err) { /* as above */ }
+    });
+  }
+  Array.prototype.forEach.call(
+    document.querySelectorAll('button[data-bw-copy]'),
+    function (copyButton) {
+      copyButton.addEventListener('click', function () {
+        var value = copyButton.getAttribute('data-bw-copy') || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(value).catch(function () { /* no-op */ });
+        }
+      });
+    }
+  );
+})();
+</script>
+</body>
+</html>

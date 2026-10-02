@@ -282,6 +282,17 @@ if (typeof module !== 'undefined' && module.exports) {
     }
   }
 
+  function replaceQuery(query) {
+    /* Collapse replaces (never pushes) the URL — the address bar reflects
+       the collapsed view without stacking a history entry on top of the
+       record URL, so Back still lands on the catalogue. */
+    try {
+      history.replaceState({}, '', queryForUrl(query));
+    } catch (err) {
+      /* as above */
+    }
+  }
+
   function restoreFromUrl() {
     var params = new URLSearchParams(location.search);
     function setSelect(id, value) {
@@ -520,7 +531,7 @@ if (typeof module !== 'undefined' && module.exports) {
         if (open) {
           event.preventDefault();
           pair.detail.setAttribute('hidden', '');
-          pushQuery(currentQuery());
+          replaceQuery(currentQuery());
         }
       });
     });

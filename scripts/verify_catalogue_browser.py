@@ -207,8 +207,12 @@ def main() -> int:
             )
 
             # the signature filter reveals an unsigned row with the unsigned
-            # cell (icon + visible text — B-I's browser half)
+            # cell (icon + visible text — B-I's browser half). The text filter
+            # from the match flow above is cleared first (its needle names a
+            # SIGNED row and would AND the reveal away).
             if unsigned:
+                page.fill("#q", "")
+                page.wait_for_timeout(400)
                 page.select_option("#sig", "unsigned")
                 page.wait_for_timeout(300)
                 revealed = page.locator(
@@ -240,6 +244,91 @@ def main() -> int:
                 ),
                 "the theme toggle did not set data-theme",
             )
+
+            # the drill-down (B-D): clicking a default row's anchor loads the
+            # record page's #release-detail into the row's detail host, pushes
+            # the record URL, and back restores the catalogue URL. (htmx's
+            # back-restore swaps the DOM from its own snapshot cache, so the
+            # collapse clause runs on a fresh reload below.)
+            page.click("#bw-clear-filters")
+            page.wait_for_timeout(400)
+            first_anchor = page.locator(
+                "#release-rows tr.bw-row[data-bw-package-id]:not([hidden]) "
+                "a.release-name"
+            ).first
+            record_url = first_anchor.get_attribute("href") or ""
+            _check(record_url.startswith("records/"), f"unexpected drill href: {record_url}")
+            fetches_before = sum(1 for url in requests if url == origin + "/" + record_url)
+            first_anchor.click()
+            page.wait_for_timeout(500)
+            _check(
+                page.locator("tr.bw-detail-row:not([hidden])").count() >= 1,
+                "the drill-down opened no detail row",
+            )
+            _check(
+                page.locator(
+                    "tr.bw-detail-row:not([hidden]) .bw-detail-host #release-detail"
+                ).count()
+                == 1,
+                "the record page's #release-detail did not load into the detail host",
+            )
+            _check(
+                page.url.endswith(record_url),
+                f"the drill did not push the record URL: {page.url}",
+            )
+            fetches_after = sum(1 for url in requests if url == origin + "/" + record_url)
+            _check(
+                fetches_after == fetches_before + 1,
+                f"the drill fetched {fetches_after - fetches_before} time(s), expected 1",
+            )
+            page.go_back()
+            page.wait_for_timeout(500)
+            _check(
+                not page.url.endswith(record_url),
+                f"go-back did not restore the catalogue URL: {page.url}",
+            )
+
+            # collapse without re-fetch, on a fresh reload (fetch-once-per-row)
+            page.reload(wait_until="networkidle")
+            fresh_anchor = page.locator(
+                "#release-rows tr.bw-row[data-bw-package-id]:not([hidden]) "
+                "a.release-name"
+            ).first
+            fresh_url = fresh_anchor.get_attribute("href") or ""
+            _check(fresh_url == record_url, "the drill anchor moved between reloads")
+            fresh_anchor.click()
+            page.wait_for_timeout(500)
+            _check(
+                page.locator("tr.bw-detail-row:not([hidden])").count() >= 1,
+                "the fresh drill-down opened no detail row",
+            )
+            fresh_anchor.click()  # collapse without re-fetch
+            page.wait_for_timeout(300)
+            _check(
+                page.locator("tr.bw-detail-row:not([hidden])").count() == 0,
+                "the second click did not collapse the detail row",
+            )
+            fetches_final = sum(1 for url in requests if url == origin + "/" + record_url)
+            _check(
+                fetches_final == fetches_after + 1,
+                f"the collapse-cycle fetched {fetches_final - fetches_after} time(s) "
+                "beyond the single open fetch (fetch-once-per-row broken)",
+            )
+
+            # without JS the anchor navigates to a page that serves 200 from
+            # the artifact (B-D's no-JS leg)
+            nojs = browser.new_context(java_script_enabled=False)
+            nojs_page = nojs.new_page()
+            response = nojs_page.goto(origin + "/" + record_url, wait_until="load")
+            _check(
+                response is not None and response.status == 200,
+                f"the record page did not serve 200 without JS: {record_url}",
+            )
+            _check(
+                nojs_page.locator("main#release-detail").count() == 1,
+                "the standalone record page lost its #release-detail region",
+            )
+            nojs.close()
 
             # a non-matching query empties the table with the honest state
             page.fill("#q", "zz-no-such-plugin-anywhere")

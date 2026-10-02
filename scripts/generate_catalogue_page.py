@@ -70,6 +70,30 @@ MARKER_DISPLAY: dict[str, str] = {
     "review-is-process-not-proof": "review is process, not proof",
 }
 
+#: The record page's marker EXPLANATIONS (§2.6) — a SINGLE-CARRIER map
+#: (record pages are static; no JS clones them), seeded with the mockup's
+#: two sentences. An unknown marker id renders its id with no explanation
+#: line (forward-honest, CR-37 kin) — pinned by the record-page tests.
+MARKER_EXPLANATION: dict[str, str] = {
+    "conformance-evidence-self-attested": (
+        "The publisher ran and reported the conformance evidence."
+    ),
+    "review-is-process-not-proof": (
+        "Review followed the registry process; it does not prove behaviour."
+    ),
+}
+
+#: Publisher repository protection ids -> display labels, and states ->
+#: display text (the mockup renders `declared-not-verified` as "declared,
+#: not verified"; any other state renders verbatim — forward-honest).
+PROTECTION_LABELS: dict[str, str] = {
+    "push-protection": "Push protection",
+    "code-scanning": "Code scanning",
+}
+PROTECTION_STATE_DISPLAY: dict[str, str] = {
+    "declared-not-verified": "declared, not verified",
+}
+
 #: Machine kind -> rendered badge text (CR-56: a row never renders without
 #: it). A TWIN of the JS KIND_DISPLAY, pinned by the page tests.
 KIND_DISPLAY: dict[str, str] = {
@@ -114,6 +138,23 @@ SNAPSHOT_MARKER = "<!-- bw:snapshot -->"
 CAPTION_MARKER = "<!-- bw:caption -->"
 WORDMARK_BEGIN = "<!-- bw:wordmark begin -->"
 WORDMARK_END = "<!-- bw:wordmark end -->"
+RECORD_BEGIN = "<!-- bw:record begin -->"
+RECORD_END = "<!-- bw:record end -->"
+
+#: The record page sits five directories below the site root
+#: (records/<registry_id>/<publisher>/<plugin>/<version>/) — every asset
+#: and the catalogue link resolve through this prefix (R10: relative only).
+UP_PREFIX = "../" * 5
+
+#: The admission notice, verbatim from the mockup (§2.6 — adopt unchanged).
+ADMISSION_NOTICE = (
+    "Publication is not authorization. Admit this release on your own bench "
+    "through your gateway's local admission, pinned to the manifest digest above."
+)
+
+#: The honest-negative hardware line (§2.6 — derived, rendered iff no
+#: hardware-evidence entry exists).
+NO_HARDWARE_LINE = "No hardware evidence is recorded for this release."
 
 _SVG_ATTRS = (
     'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
@@ -173,6 +214,25 @@ ICONS: dict[str, str] = {
         '</path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>'
     ),
 }
+
+#: The record page's extra icons (breadcrumb chevron, digest copy button,
+#: report-file link) — circle/rect-free like every icon on this site (§2.8).
+ICONS["chevron-right"] = (
+    f'<svg width="14" height="14" {_SVG_ATTRS}><path d="m9 18 6-6-6-6"></path></svg>'
+)
+ICONS["copy"] = (
+    f'<svg width="14" height="14" {_SVG_ATTRS}>'
+    '<path d="M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10'
+    'a2 2 0 0 1 2-2z"></path>'
+    '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>'
+)
+ICONS["file"] = (
+    f'<svg width="14" height="14" {_SVG_ATTRS}>'
+    '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588'
+    'A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>'
+    '<path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10 9H8"></path>'
+    '<path d="M16 13H8"></path><path d="M16 17H8"></path></svg>'
+)
 
 #: The Registry sub-brand wordmark variant (§2.8), shipped DARK behind
 #: ``--registry-mark``. The three stack-glyph bars are the vendored
@@ -559,6 +619,470 @@ def render_page(
     return page.replace(PROVENANCE_MARKER, _stamp_html(sha, index_version), 1)
 
 
+def _release_tree_url(row: dict[str, Any], sha: str) -> str:
+    """The row's versionless release directory AT THE STAMPED COMMIT (R7 —
+    the mockup's own target for report links and the Open-release-files
+    button; the per-file downloads carry the exact versioned raw URLs)."""
+    registry_id = str(row.get("registry_id") or "")
+    package_id = str(row.get("package_id") or "")
+    return (
+        f"https://github.com/madeinoz67/benchweave-registry/tree/{sha}/releases"
+        f"/{registry_id}/{package_id}"
+    )
+
+
+def _raw_file_url(row: dict[str, Any], sha: str, name: str) -> str:
+    """One release file, raw at the STAMPED commit (§2.7 — exact bytes, zero
+    deploy weight; no LFS in this repo, disclosed residual)."""
+    return (
+        f"https://raw.githubusercontent.com/madeinoz67/benchweave-registry/{sha}"
+        f"/releases/{row.get('registry_id') or ''}/{row.get('package_id') or ''}"
+        f"/{row.get('version') or ''}/{name}"
+    )
+
+
+def _copy_button(value: str) -> str:
+    return (
+        f'<button type="button" class="copy-button" data-bw-copy="{_esc(value)}" '
+        f'aria-label="Copy digest">{ICONS["copy"]}</button>'
+    )
+
+
+def _kv_row(key: str, value_html: str) -> str:
+    return (
+        f'<tr><th scope="row">{_esc(key)}</th><td>{value_html}</td></tr>'
+    )
+
+
+def _date_part(value: Any) -> str:
+    return str(value or "")[:10]
+
+
+def _record_fragment(
+    row: dict[str, Any],
+    publisher_entry: dict[str, Any],
+    files: list[dict[str, str]],
+    sha: str,
+) -> str:
+    """The record page's main fragment (pure; §2.10 — no filesystem): every
+    field of §2.6's set against the row model, the publisher entry (the
+    render-time join) and the enumerated release files."""
+    publisher = str(row.get("publisher") or "")
+    plugin = str(row.get("package_id") or "").split("/")[-1]
+    tree_url = _esc(_release_tree_url(row, sha))
+    chevron = ICONS["chevron-right"]
+    breadcrumb = (
+        '<nav class="breadcrumb" aria-label="Breadcrumb">'
+        f'<a href="{UP_PREFIX}index.html">Catalogue</a>{chevron}'
+        f'<span class="mono">{_esc(publisher)}</span>{chevron}'
+        f'<span class="mono" aria-current="page">{_esc(plugin)}</span></nav>'
+    )
+    signed = row.get("signature_state") == "signed-valid"
+    version_badge = (
+        '<span class="badge badge-version mono">'
+        f'{_esc(str(row.get("version") or ""))}</span>'
+    )
+    kind_badge = (
+        '<span class="badge badge-version">'
+        f'{_esc(KIND_DISPLAY.get(str(row.get("kind")), str(row.get("kind") or "")))}</span>'
+    )
+    if signed:
+        sig_pill = (
+            f'<span class="sig-pill" title="{_esc(SIG_TITLE_SIGNED)}">'
+            f"{ICONS['signature']}Signed by {_esc(publisher)}</span>"
+        )
+        sig_row = (
+            f'<span class="sig-line">{ICONS["signature"]}Valid against the '
+            "recorded ed25519 key</span>"
+        )
+    else:
+        sig_pill = (
+            f'<span class="sig-pill sig-pill-unsigned" title="{_esc(SIG_TITLE_UNSIGNED)}">'
+            f"{ICONS['circle-dashed']}Unsigned</span>"
+        )
+        sig_row = '<span class="muted">No publisher signature</span>'
+    validity = publisher_entry.get("key_validity") or {}
+    key_validity = (
+        f'<span class="mono">{_esc(_date_part(validity.get("not_before")))} to '
+        f'{_esc(_date_part(validity.get("not_after")))}</span>'
+    )
+    vetted = publisher_entry.get("vetted_at")
+    vetted_html = (
+        f' <span class="muted">vetted {_esc(_date_part(vetted))}</span>'
+        if vetted
+        else ""
+    )
+    timestamp = row.get("timestamp")
+    if timestamp is None and row.get("timestamp_recommended"):
+        timestamp_html = (
+            '<span class="badge badge-warning">none recorded, recommended</span>'
+        )
+    elif timestamp is None:
+        timestamp_html = '<span class="muted">none recorded</span>'
+    else:
+        timestamp_html = f'<span class="mono">{_esc(str(timestamp))}</span>'
+    gateway_ref = row.get("gateway_ref")
+    gateway_html = (
+        f'<span class="mono" title="{_esc(str(gateway_ref))}">'
+        f"{_esc(_short(str(gateway_ref)))}</span>"
+        if gateway_ref
+        else '<span class="muted">none recorded</span>'
+    )
+    source = str(row.get("source_revision") or "")
+    manifest_digest = str(row.get("manifest_sha256") or "")
+    provenance = "<table>" + "".join(
+        [
+            _kv_row(
+                "Publisher",
+                f'<span class="mono">{_esc(publisher)}</span>{vetted_html}',
+            ),
+            _kv_row("Signature", sig_row),
+            _kv_row("Key validity", key_validity),
+            _kv_row("Timestamp", timestamp_html),
+            _kv_row(
+                "Source revision",
+                f'<span class="mono break-all">{_esc(source)}</span>'
+                f"{_copy_button(source)}",
+            ),
+            _kv_row(
+                "Manifest SHA-256",
+                f'<span class="mono break-all">{_esc(manifest_digest)}</span>'
+                f"{_copy_button(manifest_digest)}",
+            ),
+            _kv_row("Gateway ref", gateway_html),
+            _kv_row(
+                "Licence",
+                f'<span class="mono">{_esc(str(row.get("licence_spdx") or ""))}</span>',
+            ),
+        ]
+    ) + "</table>"
+
+    evidence_rows: list[str] = []
+    for entry in row.get("evidence") or []:
+        result = _esc(str(entry.get("result") or "unknown"))
+        tone = "badge-version" if result == "passed" else "badge-danger"
+        if result == "partial":
+            tone = "badge-warning"
+        report_path = str(entry.get("report_path") or "")
+        report_html = (
+            f'<a class="report-link mono" href="{tree_url}">{ICONS["file"]}'
+            f"{_esc(report_path)}</a>"
+            if report_path
+            else '<span class="muted">none recorded</span>'
+        )
+        evidence_rows.append(
+            f"<tr><td>{_esc(str(entry.get('level') or 'unknown'))}</td>"
+            f'<td><span class="badge {tone}">{result}</span></td>'
+            f"<td>{report_html}</td></tr>"
+        )
+    if not evidence_rows:
+        evidence_rows.append(
+            '<tr><td colspan="3" class="muted">no test evidence recorded</td></tr>'
+        )
+    has_hardware = any(
+        str(entry.get("level")) == "hardware" for entry in row.get("evidence") or []
+    )
+    hardware_line = "" if has_hardware else f"<p class=\"muted\">{NO_HARDWARE_LINE}</p>"
+
+    compat = row.get("compatibility") or {}
+
+    def _joined(values: Any) -> str:
+        items = [str(v) for v in (values or [])]
+        return f'<span class="mono">{_esc(", ".join(items))}</span>' if items else (
+            '<span class="muted">none declared</span>'
+        )
+
+    triples = row.get("transport_triples") or []
+    if triples:
+        triple_html = "<br>".join(
+            f'<span class="mono" title="{_esc(str(t.get("sha256")))}">'
+            f"{_esc(str(t.get('id')))} · {_esc(str(t.get('version')))} · "
+            f"{_esc(_short(str(t.get('sha256'))))}</span>"
+            for t in triples
+        )
+    else:
+        triple_html = '<span class="muted">None declared</span>'
+    compatibility = "<table>" + "".join(
+        [
+            _kv_row("OTDP", _joined(compat.get("otdp_versions"))),
+            _kv_row("Adapter API", _joined(compat.get("adapter_api_versions"))),
+            _kv_row("STG", _joined(compat.get("stg_versions"))),
+            _kv_row("Transport providers", triple_html),
+        ]
+    ) + "</table>"
+
+    caps = row.get("capabilities") or {}
+
+    def _yes_no(flag: Any) -> str:
+        return "Yes" if flag else "No"
+
+    capabilities = "<table>" + "".join(
+        [
+            _kv_row("Network egress", _yes_no(caps.get("network_egress"))),
+            _kv_row(
+                "Subprocess or native library",
+                _yes_no(caps.get("subprocess_or_native_library")),
+            ),
+            _kv_row(
+                "Filesystem writes beyond evidence retention",
+                _yes_no(caps.get("filesystem_writes_beyond_evidence_retention")),
+            ),
+        ]
+    ) + "</table>"
+
+    marker_lines = []
+    for marker in row.get("unverified_markers") or []:
+        mid = str(marker)
+        explanation = MARKER_EXPLANATION.get(mid)
+        explanation_html = (
+            f'<span class="muted">{_esc(explanation)}</span>' if explanation else ""
+        )
+        marker_lines.append(
+            f'<span class="marker-row"><span class="badge badge-warning mono">'
+            f"{_esc(mid)}</span>{explanation_html}</span>"
+        )
+    markers_html = (
+        '<div class="marker-list">' + "".join(marker_lines) + "</div>"
+        if marker_lines
+        else '<p class="muted">none recorded</p>'
+    )
+
+    file_items: list[str] = []
+    for entry in files:
+        name = _esc(str(entry.get("name") or ""))
+        href = _esc(_raw_file_url(row, sha, str(entry.get("name") or "")))
+        digest = str(entry.get("digest") or "")
+        digest_html = (
+            f' <span class="mono break-all muted">{_esc(digest)}</span>'
+            if digest
+            else ""
+        )
+        file_items.append(f'<li><a href="{href}">{name}</a>{digest_html}</li>')
+    files_html = (
+        f'<ul class="file-list">{"".join(file_items)}</ul>' if file_items
+        else '<p class="muted">none present</p>'
+    )
+
+    protections = publisher_entry.get("publisher_repo_protections") or []
+    if protections:
+        protection_rows = "".join(
+            "<dt>"
+            + _esc(
+                PROTECTION_LABELS.get(
+                    str(p.get("protection")), str(p.get("protection"))
+                )
+            )
+            + "</dt><dd><span class=\"badge badge-warning\">"
+            + _esc(
+                PROTECTION_STATE_DISPLAY.get(
+                    str(p.get("state")), str(p.get("state"))
+                )
+            )
+            + "</span></dd>"
+            for p in protections
+        )
+        protections_html = f"<dl>{protection_rows}</dl>"
+    else:
+        protections_html = '<p class="muted">none recorded</p>'
+
+    advisories = row.get("advisories") or []
+    if advisories:
+        advisories_html = "".join(
+            f'<span class="badge badge-danger mono">{_esc(str(a))}</span>' for a in advisories
+        )
+    else:
+        advisories_html = "None"
+    firmware = row.get("firmware_attestation")
+    if firmware is None:
+        firmware_html = '<span class="muted">No vendor attestation</span>'
+    else:
+        firmware_html = (
+            f'<span class="mono">{_esc(str(firmware.get("vendor")))} · manifest '
+            f"{_esc(str(firmware.get('manifest')))}</span>"
+        )
+    maintenance = str(row.get("maintenance") or "unknown")
+
+    return "\n".join(
+        [
+            breadcrumb,
+            '<div class="record-head">',
+            f'<div class="badge-row">{version_badge}{kind_badge}{sig_pill}</div>',
+            f"<h1>{_esc(str(row.get('display_name') or ''))}</h1>",
+            f'<p class="summary">{_esc(str(row.get("summary") or ""))}</p>',
+            "</div>",
+            '<div class="record-grid">',
+            '<div class="record-main">',
+            '<section aria-labelledby="prov-h"><h2 id="prov-h">Provenance</h2>'
+            f"{provenance}</section>",
+            f'<section aria-labelledby="ev-h"><h2 id="ev-h">Evidence</h2>'
+            f"<table>{''.join(evidence_rows)}</table>{hardware_line}</section>",
+            f'<section aria-labelledby="compat-h"><h2 id="compat-h">Compatibility</h2>'
+            f"{compatibility}</section>",
+            f'<section aria-labelledby="caps-h"><h2 id="caps-h">Declared capabilities</h2>'
+            f"{capabilities}</section>",
+            f'<section aria-labelledby="unv-h"><h2 id="unv-h">Unverified markers</h2>'
+            f"{markers_html}</section>",
+            "</div>",
+            '<aside class="record-aside">',
+            '<div class="aside-card">',
+            "<h2>Admission</h2>",
+            f'<p class="muted">{ADMISSION_NOTICE}</p>',
+            f'<a class="open-files-button" href="{tree_url}">Open release files'
+            f"{ICONS['chevron-right']}</a>",
+            f"<h3>Release files</h3>{files_html}",
+            "</div>",
+            '<div class="aside-card"><h2>Status</h2><dl>'
+            f'<dt>Maintenance</dt><dd><span class="badge '
+            f'{MAINTENANCE_BADGE.get(maintenance, "badge-muted")}">'
+            f"{_esc(MAINTENANCE_DISPLAY.get(maintenance, maintenance))}</span></dd>"
+            f"<dt>Advisories</dt><dd>{advisories_html}</dd>"
+            f"<dt>Firmware</dt><dd>{firmware_html}</dd>"
+            "</dl></div>",
+            '<div class="aside-card"><h2>Publisher repository</h2>'
+            f"{protections_html}</div>",
+            "</aside>",
+            "</div>",
+        ]
+    )
+
+
+def render_record_page(
+    row: dict[str, Any],
+    publisher_entry: dict[str, Any],
+    files: list[dict[str, str]],
+    sha: str,
+    template: str,
+    *,
+    index_version: int = 1,
+    registry_mark: bool = False,
+) -> str:
+    """One deployable record page (pure; no filesystem, deterministic)."""
+    for marker, what in (
+        (RECORD_BEGIN, "bw:record begin"),
+        (RECORD_END, "bw:record end"),
+        (PROVENANCE_MARKER, "bw:provenance"),
+        (WORDMARK_BEGIN, "bw:wordmark begin"),
+        (WORDMARK_END, "bw:wordmark end"),
+    ):
+        if template.count(marker) != 1:
+            raise SystemExit(
+                "page_input_invalid: catalogue/record.template.html does not "
+                f"carry exactly one {what} marker"
+            )
+    head, rest = template.split(RECORD_BEGIN, 1)
+    _, tail = rest.split(RECORD_END, 1)
+    chrome = head + tail
+    for marker in (PROVENANCE_MARKER,):
+        chrome = chrome.replace(marker, "", 1)
+    if not registry_mark:
+        chrome = chrome.replace(WORDMARK_BEGIN, "", 1).replace(WORDMARK_END, "", 1)
+    _check_structural(chrome, "catalogue/record.template.html (structural chrome)")
+    fragment = _record_fragment(row, publisher_entry, files, sha)
+    page = head + RECORD_BEGIN + "\n" + fragment + "\n" + RECORD_END + tail
+    if registry_mark:
+        _head, _sep, rest2 = page.partition(WORDMARK_BEGIN)
+        _marked, _sep2, tail2 = rest2.partition(WORDMARK_END)
+        page = (
+            _head + WORDMARK_BEGIN + "\n  " + REGISTRY_WORDMARK + "\n  "
+            + WORDMARK_END + tail2
+        )
+    return page.replace(PROVENANCE_MARKER, _stamp_html(sha, index_version), 1)
+
+
+def _load_publishers(root: Path) -> dict[str, dict[str, Any]]:
+    path = root / "records" / "publishers.json"
+    if not path.is_file():
+        return {}
+    try:
+        document: Any = json.loads(path.read_bytes())
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise SystemExit(
+            f"page_input_invalid: records/publishers.json is not parseable JSON ({exc})"
+        ) from exc
+    publishers = document.get("publishers") if isinstance(document, dict) else None
+    if not isinstance(publishers, list):
+        return {}
+    entries: dict[str, dict[str, Any]] = {}
+    for entry in publishers:
+        if isinstance(entry, dict) and entry.get("publisher_id"):
+            entries[str(entry["publisher_id"])] = entry
+    return entries
+
+
+def _release_dir(root: Path, row: dict[str, Any]) -> Path:
+    return (
+        root / "releases" / str(row.get("registry_id") or "")
+        / str(row.get("package_id") or "") / str(row.get("version") or "")
+    )
+
+
+def _release_files(root: Path, row: dict[str, Any]) -> list[dict[str, str]]:
+    """Every regular file in the row's release directory (§2.7), sorted —
+    the manifest entry displays the ROW's digest, the payload entry the
+    MANIFEST-DECLARED archive digest, others link raw with no claim."""
+    release_dir = _release_dir(root, row)
+    if not release_dir.is_dir():
+        raise SystemExit(
+            "page_release_dir_missing: "
+            f"{row.get('registry_id')}/{row.get('package_id')}/{row.get('version')}"
+        )
+    payload_digest = ""
+    manifest_path = release_dir / "manifest.json"
+    if manifest_path.is_file():
+        try:
+            declared: Any = json.loads(manifest_path.read_bytes()).get("payload", {})
+            if isinstance(declared, dict):
+                payload_digest = str(declared.get("sha256") or "")
+        except (ValueError, UnicodeDecodeError):
+            payload_digest = ""
+    files: list[dict[str, str]] = []
+    for path in sorted(p for p in release_dir.iterdir() if p.is_file()):
+        name = path.name
+        digest = ""
+        if name == "manifest.json":
+            digest = str(row.get("manifest_sha256") or "")
+        elif name == "payload.zip":
+            digest = payload_digest
+        files.append({"name": name, "digest": digest})
+    return files
+
+
+def _verify_row_signature(
+    root: Path, row: dict[str, Any], publisher_entry: dict[str, Any]
+) -> None:
+    """§2.7's honesty upgrade: every row rendered as signed is VERIFIED at
+    generation time with the clone verifier's own check
+    (``verify.release_signature_verifies`` — the exact publisher-key-over-
+    manifest.sig check ``scripts/verify.py`` performs). A mismatch is a
+    typed refusal — a tampered signature never renders a page claiming
+    validity, and nothing deploys."""
+    import verify
+
+    label = f"{row.get('registry_id')}/{row.get('package_id')}/{row.get('version')}"
+    ok = verify.release_signature_verifies(
+        root, str(row.get("publisher") or ""), _release_dir(root, row)
+    )
+    if not ok:
+        raise SystemExit(
+            f"page_signature_invalid: {label} — the row claims signed-valid but "
+            "its manifest.sig does not verify against the publisher's recorded "
+            "key (or the key/signature files are absent)"
+        )
+
+
+def _publisher_entry_or_refuse(
+    row: dict[str, Any], publishers: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    entry = publishers.get(str(row.get("publisher") or ""))
+    if entry is None:
+        raise SystemExit(
+            f"page_publisher_unknown: {row.get('publisher')} "
+            f"({row.get('package_id') or 'row'}) — the page never guesses a "
+            "key or a vetting date"
+        )
+    return entry
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=REPO)
@@ -574,17 +1098,21 @@ def main() -> int:
     root = args.root.resolve()
     dest = args.dest.resolve()
     template = (root / "catalogue" / "index.template.html").read_text(encoding="utf-8")
+    record_template = (root / "catalogue" / "record.template.html").read_text(encoding="utf-8")
     index_bytes = (root / "index.json").read_bytes()
-    publishers_path = root / "records" / "publishers.json"
-    publisher_count = 0
-    if publishers_path.is_file():
-        try:
-            publishers = json.loads(publishers_path.read_bytes()).get("publishers", [])
-            publisher_count = len(publishers) if isinstance(publishers, list) else 0
-        except (ValueError, UnicodeDecodeError):
-            raise SystemExit(
-                "page_input_invalid: records/publishers.json is not parseable JSON"
-            ) from None
+    publishers = _load_publishers(root)
+    publisher_count = len(publishers)
+    rows = _rows_from(index_bytes)
+    try:
+        index_version = int(json.loads(index_bytes)["index_version"])
+    except (ValueError, KeyError, TypeError, UnicodeDecodeError):
+        index_version = 1
+    # The verification pass runs BEFORE anything is written: a bad signature
+    # refuses the whole deploy, not a fragment of it (§2.7 — nothing deploys).
+    for row in rows:
+        _publisher_entry_or_refuse(row, publishers)
+        if row.get("signature_state") == "signed-valid":
+            _verify_row_signature(root, row, publishers[str(row.get("publisher"))])
     page = render_page(
         index_bytes, template, args.sha,
         publisher_count=publisher_count, registry_mark=args.registry_mark,
@@ -592,16 +1120,29 @@ def main() -> int:
     (dest / "assets").mkdir(parents=True, exist_ok=True)
     (dest / "index.html").write_text(page, encoding="utf-8")
     (dest / "index.json").write_bytes(index_bytes)
-    for asset in ("plugins.js", "catalogue.css", "htmx.min.js"):
-        (dest / "assets" / asset).write_bytes(
-            (root / "catalogue" / "assets" / asset).read_bytes()
-            if asset != "htmx.min.js"
-            else (root / "vendored" / "htmx" / "htmx.min.js").read_bytes()
+    for asset, source in (
+        ("plugins.js", root / "catalogue" / "assets" / "plugins.js"),
+        ("catalogue.css", root / "catalogue" / "assets" / "catalogue.css"),
+        ("htmx.min.js", root / "vendored" / "htmx" / "htmx.min.js"),
+    ):
+        (dest / "assets" / asset).write_bytes(source.read_bytes())
+    written = 0
+    for row in rows:
+        entry = _publisher_entry_or_refuse(row, publishers)
+        files = _release_files(root, row)
+        record_page = render_record_page(
+            row, entry, files, args.sha, record_template,
+            index_version=index_version, registry_mark=args.registry_mark,
         )
-    rows = page.count('class="bw-row"')
+        out = dest / record_url(row)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(record_page, encoding="utf-8")
+        written += 1
+    table_rows = page.count('class="bw-row"')
     print(
         f"generate_catalogue_page: wrote {dest}/index.html "
-        f"({rows} row(s) incl. template, generated from {args.sha})"
+        f"({table_rows} row(s) incl. template) and {written} record page(s), "
+        f"generated from {args.sha}"
     )
     return 0
 

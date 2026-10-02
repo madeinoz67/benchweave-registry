@@ -267,6 +267,83 @@ table.bw-records { width: 100%; border-collapse: collapse; font-size: 14px; }
 /* empty states */
 #catalogue-empty, .catalogue-empty-static { color: var(--text-muted); font-size: 14px; padding: 18px 0; }
 
+/* ── the record page (records/<…>/index.html, #224 follow-on §2.6) ────── */
+
+main#release-detail {
+  display: flex; flex-direction: column; gap: 28px;
+  padding: 28px 32px 0;
+}
+.breadcrumb {
+  display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-muted);
+}
+.breadcrumb a { color: var(--blue); text-decoration: none; }
+.record-head { display: flex; flex-direction: column; gap: 12px; max-width: 900px; }
+.badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sig-pill {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500;
+  padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong);
+}
+.sig-pill-unsigned { color: var(--text-muted); }
+.record-head h1 {
+  margin: 0; font-family: var(--font-display); font-size: 36px; font-weight: 700;
+  letter-spacing: -0.01em; line-height: 1.2;
+}
+.record-head .summary { margin: 0; color: var(--text-muted); max-width: 62ch; }
+.record-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px;
+  align-items: start;
+}
+.record-main { display: flex; flex-direction: column; gap: 36px; min-width: 0; }
+.record-main section { display: flex; flex-direction: column; gap: 10px; }
+.record-main h2 {
+  margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 600;
+}
+.record-main h3 { margin: 14px 0 0; font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+.record-main table { width: 100%; border-collapse: collapse; }
+.record-main th {
+  padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  color: var(--text-muted); white-space: nowrap; width: 240px; vertical-align: top;
+}
+.record-main td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 14px;
+  vertical-align: top;
+}
+.break-all { word-break: break-all; }
+.sig-line { display: inline-flex; align-items: center; gap: 6px; }
+.copy-button {
+  width: 32px; height: 32px; flex-shrink: 0; display: inline-flex;
+  align-items: center; justify-content: center; background: transparent;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-muted); cursor: pointer; vertical-align: middle;
+}
+.report-link {
+  display: inline-flex; align-items: center; gap: 6px; color: var(--blue);
+  font-family: var(--font-mono); font-size: 13px;
+}
+.marker-list { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.marker-row { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.record-aside { display: flex; flex-direction: column; gap: 16px; }
+.aside-card {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--bg-elevated); padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.aside-card h2 { margin: 0; font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+.aside-card dl {
+  margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px;
+  font-size: 14px; align-items: center;
+}
+.aside-card dt { color: var(--text-muted); }
+.aside-card dd { margin: 0; }
+.open-files-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; border-radius: var(--radius-sm); background: var(--amber-solid);
+  color: var(--amber-on); font-weight: 600; font-size: 14px; text-decoration: none;
+}
+.file-list { margin: 0; padding-left: 18px; font-size: 14px; }
+.file-list li { margin: 4px 0; word-break: break-all; }
+
 /* footer */
 .page-foot {
   border-top: 1px solid var(--border); margin-top: 48px; padding: 24px 32px 40px;
