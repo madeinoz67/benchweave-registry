@@ -221,6 +221,7 @@ def test_default_page_excludes_non_default_kinds_and_unsigned() -> None:
         "harborline-systems/harborline-relay",  # admitted-release but unsigned
         "harborline-systems/harborline-relay16",  # community-shared
         "harborline-systems/harborline-pwm",  # community-shared + unsigned
+        "northwind-instruments/northwind-cal",  # admitted-release + hardware evidence, but unsigned
         "northwind-instruments/northwind-fixture",  # in-tree-fixture
     ):
         assert f'data-bw-package-id="{pid}"' not in page, f"non-default row rendered: {pid}"

@@ -36,6 +36,7 @@ QUERY_KEYS = {
     "maintenance",
     "advisories",
     "kind",
+    "evidence_level",
 }
 DIMENSIONS = {
     "name",
@@ -44,6 +45,7 @@ DIMENSIONS = {
     "standard_version",
     "status",
     "kind",
+    "evidence",
     "sentinel",
     "default",
     "negative",
@@ -91,13 +93,33 @@ def test_truth_table_covers_every_dimension() -> None:
     set — the sentinel-leak kill — and the two-capability AND arm pins the
     multi-capability semantics as AND)."""
     covered = {str(case["dimension"]) for case in _cases()}
-    for dimension in ("name", "publisher", "capability", "standard_version", "status", "kind"):
+    for dimension in (
+        "name", "publisher", "capability", "standard_version", "status", "kind", "evidence",
+    ):
         assert dimension in covered, f"no truth-table case covers dimension: {dimension}"
     assert "sentinel" in covered, "the sentinel arms (B1') are missing"
     assert "negative" in covered, "the nonexistent-query arm is missing"
     assert "combined" in covered, "the combined-query arm is missing"
     negative = [c for c in _cases() if c["dimension"] == "negative"]
     assert all(list(c["expect"]) == [] for c in negative), "a negative arm must expect zero rows"
+
+
+def test_dropped_selects_stay_predicate_dimensions() -> None:
+    """The #224 follow-on dropped the publisher and standard-version SELECTS
+    from the shipped UI (the mockup carries neither; publisher stays reachable
+    through text search). The PREDICATE keeps both dimensions, so both stay
+    truth-table-tested — this arm refuses a future 'clean-up' that deletes the
+    dimensions' cases (or the dimension itself) just because no select exposes
+    them."""
+    covered = {str(case["dimension"]) for case in _cases()}
+    assert "publisher" in covered, (
+        "the publisher dimension lost its truth-table coverage when the UI "
+        "dropped its select — the predicate still filters on it"
+    )
+    assert "standard_version" in covered, (
+        "the standard-version dimension lost its truth-table coverage when the "
+        "UI dropped its select — the predicate still filters on it"
+    )
 
 
 def test_sentinel_arm_expects_the_empty_set_not_the_catalogue() -> None:
@@ -134,26 +156,28 @@ def test_the_capability_and_arm_is_derived_from_both_flags() -> None:
 
 
 def test_fixture_carries_cr24s_denominator() -> None:
-    """The 10-row fixture represents every dimension value the arms need.
+    """The 11-row fixture represents every dimension value the arms need.
 
-    CR-24's own denominator: at least 10 rows with all dimensions
-    represented — 3 publishers; kinds admitted-release x7, community-shared
-    x2, in-tree-fixture x1; signature signed x8 / unsigned x2; all four
-    maintenance values; stg_versions {1.4, 1.5} and otdp_versions
-    {0.2.1, 0.2.2}; all eight capability boolean combinations; advisories on
-    at least two rows; and one publisher/name-prefix pair sharing a
-    disambiguation boundary.
+    CR-24's own denominator (10 rows, all dimensions represented) grown by the
+    #224 follow-on with ONE hardware-evidence row: 3 publishers; kinds
+    admitted-release x8, community-shared x2, in-tree-fixture x1; signature
+    signed x8 / unsigned x3; all four maintenance values; stg_versions
+    {1.4, 1.5} and otdp_versions {0.2.1, 0.2.2}; all eight capability boolean
+    combinations; advisories on at least two rows; evidence levels
+    {hardware, simulated, structural} represented (the follow-on's evidence
+    facet — the slice-2 ten rows carried no hardware row); and one
+    publisher/name-prefix pair sharing a disambiguation boundary.
     """
     rows = _rows()
-    assert len(rows) == 10, f"CR-24's fixture is 10 rows, got {len(rows)}"
+    assert len(rows) == 11, f"the fixture is 11 rows, got {len(rows)}"
     assert len({row["publisher"] for row in rows}) == 3
     kinds = [row["kind"] for row in rows]
-    assert kinds.count("admitted-release") == 7
+    assert kinds.count("admitted-release") == 8
     assert kinds.count("community-shared") == 2
     assert kinds.count("in-tree-fixture") == 1
     signatures = [row["signature_state"] for row in rows]
     assert signatures.count("signed-valid") == 8
-    assert signatures.count("unsigned") == 2
+    assert signatures.count("unsigned") == 3
     assert {row["maintenance"] for row in rows} == {
         "maintained", "maintenance_only", "unmaintained", "unknown",
     }
@@ -171,6 +195,16 @@ def test_fixture_carries_cr24s_denominator() -> None:
     }
     assert len(combos) == 8, f"all eight capability combinations required, got {len(combos)}"
     assert sum(1 for row in rows if row["advisories"]) >= 2
+    levels = {e["level"] for row in rows for e in row["evidence"]}
+    assert levels == {"hardware", "simulated", "structural"}, levels
+    # the hardware row is OUTSIDE the default view (unsigned) — the static
+    # default stays the CR-22 set; the facet reaches it by explicit filter
+    hardware_rows = [
+        row for row in rows
+        if any(e["level"] == "hardware" for e in row["evidence"])
+    ]
+    assert len(hardware_rows) == 1, "exactly one hardware-evidence row"
+    assert hardware_rows[0]["signature_state"] == "unsigned"
     # the disambiguation pair: one publisher, one name prefix, two rows
     prefixes = [(row["publisher"], str(row["package_id"]).split("/")[1][:10]) for row in rows]
     assert len(set(prefixes)) < len(prefixes), "no publisher/name-prefix pair to disambiguate"

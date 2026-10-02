@@ -1,5 +1,5 @@
 {
-  "comment": "Synthetic 10-row catalogue fixture for the issue #224 slice-2 search truth (CR-24's own denominator). Invented names only. Rows are shaped exactly like the registry's generated index rows (records/index.schema.json) and sorted by package_id as the generator sorts. This file is search TEST DATA — it is not a registry of record and never renders on the site.",
+  "comment": "Synthetic 11-row catalogue fixture for the issue #224 slice-2 search truth (CR-24's own denominator) grown by the #224 follow-on with one hardware-evidence row (the evidence facet's discriminator; the slice-2 ten rows carried only structural/simulated/none). Invented names only. Rows are shaped exactly like the registry's generated index rows (records/index.schema.json) and sorted by package_id as the generator sorts. This file is search TEST DATA — it is not a registry of record and never renders on the site.",
   "index_version": 1,
   "generated_from": {
     "records_tree": "records/",
@@ -239,6 +239,52 @@
         "conformance-evidence-self-attested",
         "review-is-process-not-proof",
         "community-shared-not-vetted"
+      ]
+    },
+    {
+      "registry_id": "benchweave-registry",
+      "package_id": "northwind-instruments/northwind-cal",
+      "version": "1.0.0",
+      "kind": "admitted-release",
+      "publisher": "northwind-instruments",
+      "manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "signature_state": "unsigned",
+      "timestamp": null,
+      "timestamp_recommended": true,
+      "display_name": "Northwind calibrator",
+      "summary": "Bench calibrator with hardware validation runs.",
+      "licence_spdx": "MIT",
+      "compatibility": {
+        "adapter_api_versions": ["1.2"],
+        "otdp_versions": ["0.2.2"],
+        "stg_versions": ["1.4"]
+      },
+      "evidence": [
+        {
+          "level": "hardware",
+          "report_path": "evidence/cal-hardware-evidence.md",
+          "result": "passed"
+        },
+        {
+          "level": "simulated",
+          "report_path": "evidence/cal-sim-evidence.md",
+          "result": "passed"
+        }
+      ],
+      "maintenance": "maintained",
+      "advisories": [],
+      "capabilities": {
+        "filesystem_writes_beyond_evidence_retention": false,
+        "network_egress": false,
+        "subprocess_or_native_library": false
+      },
+      "transport_triples": [],
+      "source_revision": "000000000000000000000000000000000000000b",
+      "gateway_ref": "000000000000000000000000000000000000000b",
+      "firmware_attestation": null,
+      "unverified_markers": [
+        "conformance-evidence-self-attested",
+        "review-is-process-not-proof"
       ]
     },
     {
