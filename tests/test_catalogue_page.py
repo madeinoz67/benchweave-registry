@@ -51,10 +51,23 @@ CONTRACT_SLOTS = (
     "source-revision",
 )
 
-# The lede (B3'): plain language, exactly what exists — pinned so a drift
-# toward a service claim reddens. Deliberately does NOT contain the phrase
-# "registry service" even in negation: the whole-page scan is strict.
-LEDE = "The catalogue of published releases, rendered from the registry repository of record."
+# The lede (B3', amended by the #224 follow-on §5): the mockup's wording —
+# pinned so a drift toward a service claim reddens. It makes no service claim.
+LEDE = (
+    "Published plugin releases, rendered from the registry repository of record. "
+    "Publication is discovery and provenance, never authorization: installing a "
+    "plugin stays local admission on your own bench."
+)
+
+# The pinned footer negation (the honesty amendment, §5): "registry service"
+# may appear ONLY here, in honest negation, exactly once. The rendered form
+# carries the anchor on "registry repository of record"; the pin is against
+# the artifact's real bytes.
+FOOTER_SENTENCE = (
+    "Rendered view of the "
+    '<a href="https://github.com/madeinoz67/benchweave-registry">'
+    "registry repository of record</a>. There is no hosted registry service."
+)
 
 
 def _module() -> Any:
@@ -284,6 +297,11 @@ def test_the_provenance_stamp_names_the_generating_commit() -> None:
     stamped = re.search(r'data-bw-stamp="([0-9a-f]{40})"', page)
     assert stamped is not None and stamped.group(1) == SHA
     assert SHA in page
+    # the mockup's stamp line: short sha display (the full sha rides the
+    # data-bw-stamp attribute) plus the index format version (§2.1/§2.10)
+    assert f">{SHA[:12]}</span> · index v1" in page, (
+        "the stamp line lost its short-sha display or its index version"
+    )
 
 
 def test_a_non_commit_sha_refuses() -> None:
@@ -299,16 +317,25 @@ def test_a_non_commit_sha_refuses() -> None:
 
 
 def test_whole_page_makes_no_service_claim() -> None:
-    """B3's whole-page scan: the phrase 'registry service' appears nowhere
-    (lede, footer, prose, comments), no registry.benchweave.dev URL, and
-    no sub-brand mark glyph (the styleguide's stack-glyph bars and
-    tag-glyph dot ship no <rect>/<circle> shapes)."""
+    """B3's whole-page scan, AMENDED by the #224 follow-on (§5): the mockup's
+    footer uses "registry service" in honest negation, so the strict substring
+    ban became a pinned-negation + count arm — the phrase occurs EXACTLY ONCE,
+    in the footer sentence pinned verbatim below, and no AFFIRMATIVE service
+    claim exists anywhere (lede, prose, comments). The domain ban and the
+    mark-glyph shape bans (no <rect>, no <circle> — every icon is
+    circle/rect-free by rewrite, §2.8) stand unchanged."""
     page = _render(FIXTURE.read_bytes())
     lowered = page.lower()
-    assert "registry service" not in lowered, "the page claims a registry service"
+    assert lowered.count("registry service") == 1, (
+        f"'registry service' occurs {lowered.count('registry service')} time(s) — "
+        "exactly one is required (the footer's honest negation)"
+    )
+    assert FOOTER_SENTENCE in page, "the pinned footer negation drifted"
     assert "registry.benchweave.dev" not in lowered
     assert "<rect" not in page, "a stack-glyph (Registry sub-brand mark) shape rendered"
-    assert "<circle" not in page, "a tag-glyph (Standards sub-brand mark) shape rendered"
+    assert "<circle" not in page, (
+        "a circle-bearing glyph rendered (icons are rewritten circle-free)"
+    )
 
 
 def test_the_lede_is_string_pinned() -> None:
@@ -316,11 +343,17 @@ def test_the_lede_is_string_pinned() -> None:
     assert LEDE in page, "the plain-language lede drifted"
 
 
-def test_no_registry_service_language_in_the_template() -> None:
-    """The committed chrome carries the same honesty as the render."""
-    template = _template().lower()
-    assert "registry service" not in template
-    assert "registry.benchweave.dev" not in template
+def test_no_affirmative_service_claim_in_the_template() -> None:
+    """The committed chrome carries the same honesty as the render: the phrase
+    appears exactly once (the pinned footer negation, statically in the
+    template) and the domain never appears."""
+    template = _template()
+    assert template.lower().count("registry service") == 1, (
+        "the template must carry 'registry service' exactly once — the footer's "
+        "honest negation"
+    )
+    assert "There is no hosted registry service." in template
+    assert "registry.benchweave.dev" not in template.lower()
 
 
 # ── fail-closed at generation ─────────────────────────────────────────────────

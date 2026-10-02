@@ -30,11 +30,10 @@
   <div class="intro-head">
     <p class="eyebrow mono">Registry · catalogue</p>
     <h1>Plugin catalogue</h1>
-    <p>The catalogue of published releases, rendered from the registry repository of record.</p>
-    <p class="note">There is no hosted registry — this page is generated from a git repository
-    of record. Publication is discovery and provenance, never authorization: installing a
-    plugin stays local admission on your own bench. Unverified markers ride every row
-    (process review is not proof).</p>
+    <!-- The lede and the footer negation below are exact-byte pinned by
+         tests/test_catalogue_page.py (the honesty amendment) — they stay on
+         one line each so the pin is against real bytes. -->
+    <p>Published plugin releases, rendered from the registry repository of record. Publication is discovery and provenance, never authorization: installing a plugin stays local admission on your own bench.</p>
   </div>
 
   <section id="catalogue">
@@ -86,7 +85,8 @@
 </main>
 
 <footer class="page-foot">
-  <p class="catalogue-meta"><!-- bw:provenance --></p>
+  <p class="catalogue-meta">Rendered view of the <a href="https://github.com/madeinoz67/benchweave-registry">registry repository of record</a>. There is no hosted registry service.</p>
+  <p class="catalogue-meta mono"><!-- bw:provenance --></p>
 </footer>
 
 <script src="assets/plugins.js"></script>

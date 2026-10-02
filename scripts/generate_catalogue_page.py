@@ -312,16 +312,15 @@ def _check_structural(text: str, what: str) -> None:
         )
 
 
-def _stamp_html(sha: str) -> str:
+def _stamp_html(sha: str, index_version: int = 1) -> str:
     if not SHA_RE.match(sha):
         raise SystemExit(
             "page_input_invalid: --sha must be a full 40-hex commit sha "
             f"(got {sha!r}) — the provenance stamp never guesses"
         )
     return (
-        f'generated from <span class="mono" data-bw-stamp="{sha}">{sha}</span> · '
-        'rendered view of the <a href="https://github.com/madeinoz67/benchweave-registry">'
-        "registry repository of record</a>"
+        f'generated from <span class="mono" data-bw-stamp="{sha}">'
+        f"{sha[:TRUNCATE_AT]}</span> · index v{index_version}"
     )
 
 
@@ -332,8 +331,19 @@ def render_page(index_bytes: bytes, template: str, sha: str) -> str:
     provenance stamp and the card chrome (the blank render); the cards'
     row data rides between the markers as data.
     """
+    try:
+        parsed_stamp = json.loads(index_bytes)
+        index_version = (
+            int(parsed_stamp.get("index_version", 1))
+            if isinstance(parsed_stamp, dict)
+            else 1
+        )
+    except (ValueError, UnicodeDecodeError, TypeError):
+        # a malformed or non-object index refuses in render_cards with the
+        # typed page_input_invalid: prefix — the stamp default never masks it
+        index_version = 1
     _check_structural(_card({}, blank=True, sha=sha), "the card chrome")
-    _check_structural(_stamp_html(sha), "the provenance stamp")
+    _check_structural(_stamp_html(sha, index_version), "the provenance stamp")
     if template.count(CARDS_BEGIN) != 1 or template.count(CARDS_END) != 1:
         raise SystemExit(
             "page_input_invalid: catalogue/index.template.html does not carry "
@@ -350,7 +360,7 @@ def render_page(index_bytes: bytes, template: str, sha: str) -> str:
     _check_structural(chrome, "catalogue/index.template.html (structural chrome)")
     cards = render_cards(index_bytes, sha)
     page = head + cards + tail
-    return page.replace(PROVENANCE_MARKER, _stamp_html(sha), 1)
+    return page.replace(PROVENANCE_MARKER, _stamp_html(sha, index_version), 1)
 
 
 def main() -> int:
