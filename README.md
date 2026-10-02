@@ -112,19 +112,44 @@ regression is guarded as of fold R3 (main-only deploy job; a pre-deploy
 refusal when the run's sha is no longer main's tip). Automatic
 served-state reconciliation is deferred as `D-S2i` below.
 
+**The records table and the drill-down (#224 follow-on, 2026-10-02).** The
+catalogue renders the eight-column records table (statically stamped
+versions and compatibility; signature cells icon+text, never icon-only)
+and generates ONE standalone record page per index row under
+`records/<registry-id>/<publisher>/<plugin>/<version>/` — the row name is a
+real link, enhanced in place by the vendored, digest-pinned htmx
+(`vendored/htmx/`, served same-origin; no CDN). The record page carries the
+provenance join (vetted date, key-validity window, repository protections
+from `records/publishers.json`), the evidence and compatibility detail, the
+declared-capability table, transport providers, unverified-marker
+explanations, and the per-file download links — every file in the release
+directory, raw at the STAMPED commit. Two deploy-time honesty gates ride the
+generation: a publisher whose identity is missing from `publishers.json`
+refuses (`page_publisher_unknown:`), and every row rendered as signed has
+its `manifest.sig` VERIFIED against the publisher's recorded key at
+generation (`page_signature_invalid:` on mismatch — the clone verifier's own
+check, `scripts/verify.py:release_signature_verifies`); nothing deploys on
+either refusal.
+
 ### Slice 2 deferrals (homes and reopen triggers)
 
 | # | Deferred | Carrier | Reopen trigger |
 |---|---|---|---|
 | `D-S2a` | Device-class as a search dimension (the index carries capability declarations only; a device-class facet needs an index-format train) | The frozen `records/index.schema.json` + the pivot design record §2.5 | The first index-format train that adds a device-class field, or slice 5's kind work if it needs one |
-| `D-S2b` | Per-row detail surface (transport triples, capability table, firmware attestation) | The pivot design record §3.3 | Row-density feedback from a real catalogue (>15 rows), or the first publisher asking |
-| `D-S2c` | Deep-linkable search state (query params in the URL) | The pivot design record | The first user request or shared-search evidence |
+| `D-S2b` | Per-row detail surface — FIRED 2026-10-02 by the #224 follow-on (record pages ship the transport triples, capability table and firmware attestation) | The follow-on design record (gateway repo, `.claude/deep-review/2026-10-02-issue224-followon-records-table-design.md`) | — |
+| `D-S2c` | Deep-linkable search state — HALF FIRED 2026-10-02 by the #224 follow-on (URL filter state push/restore + per-record URLs shipped); the sharing UX remnant is `D-S2c′` | The follow-on design record | — |
+| `D-S2c′` | Filter-state UX beyond URL round-tripping (named filter links, embeds) | The follow-on design record | User request |
 | `D-S2d` | Auto-merge of sync PRs — RETIRED with the pivot (no sync exists to auto-merge) | — | — |
 | `D-S2e` | Registry-side scheduled staleness sweep — RETIRED with the pivot (no mirror exists to sweep) | — | — |
-| `D-S2f` | Icons in the catalogue (Lucide is the approved set; the page ships text-only) and a11y work beyond the floor (focus rings, labels, contrast are in; a screen-reader audit is not) | The vendored styleguide's iconography section | The first a11y audit or a design pass that wants them |
-| `D-S2g` | Sub-brand mark / domain cutover (`registry.benchweave.dev`, the Registry stack-glyph) | The vendored styleguide's Sub-brands section + the whole-page honesty arm (no glyph, no domain, no service claim) | Domain half FIRED 2026-10-02 by owner decision (DNS set, Pages custom domain configured) — the catalogue's canonical home is now the domain, and the words still claim no hosted service; the mark-glyph half remains gated on the hosted registry service being real |
+| `D-S2f` | Icons in the catalogue — FIRED 2026-10-02 by the #224 follow-on (Lucide shipped: signature/circle-dashed, capability, advisories, search, theme-switcher, breadcrumb, copy, file; all circle/rect-free rewrites preserving the strict shape-ban arms). The a11y remnant is `D-S2l` | The vendored styleguide's iconography section | — |
+| `D-S2g` | Sub-brand mark / domain cutover (`registry.benchweave.dev`, the Registry stack-glyph) | The vendored styleguide's Sub-brands section + the whole-page honesty arm (no glyph, no domain, no service claim) | Domain half FIRED 2026-10-02 by owner decision; the mark half SHIPS DARK behind `--registry-mark` — both postures always tested; flips on the owner's word |
 | `D-S2h` | Advisories-only surface — today a yanked release's advisories vanish with its row (pinned as a documented reading by `tests/test_catalogue_page.py`) | Slice 4 / gateway issue #226 (response reach) | Its design pass |
 | `D-S2i` | Served-state reconciliation — a scheduled workflow curling the Pages URL, extracting the footer's `data-bw-stamp` and failing when it is not `main`'s tip (the unbounded stale-serving window above has no automatic detector) | This README's serving-staleness paragraph + the slice-2 pivot design record (gateway repo, `.claude/deep-review/2026-10-02-issue224-s2-pivot-registry-hosted-catalogue.md`) | The first observed stale-serving incident, or the owner's call |
+| `D-S2j′` | Payload/submission digests in the ROW MODEL (the record page displays the manifest-declared payload digest today, `D-S2j` narrowed by the follow-on) | `records/index.schema.json` additive-train | First index-format train / first pre-admission consumer |
+| `D-S2k` | Table sort + pagination | The follow-on design record | >50 rows or first UX report |
+| `D-S2l` | Screen-reader audit beyond the floor | `D-S2f`'s floor half (focus rings, labels, contrast are in) | The first a11y audit |
+| `D-S2m` | "How publication works" + Publishers/Advisories nav surfaces (user-facing publication prose) | Slice 4 / gateway issue #226; the follow-on design record for the prose | Slice 4's design pass |
+| `D-S2n` | The manifest's unrendered descriptive fields (limitations, maintainers, provides, permissions, device_targets, tags, released_at, issues/support URLs, changelog path) | The follow-on design record | Owner asks / slice 4 |
 
 ## Family conventions
 

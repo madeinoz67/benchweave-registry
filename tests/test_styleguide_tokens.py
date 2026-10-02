@@ -58,15 +58,32 @@ def test_the_vendored_styleguide_is_digest_pinned_to_its_origin() -> None:
         f"the vendored styleguide drifted from its pin (on-disk {digest}, "
         f"pinned {pin['sha256']}) — repin deliberately or restore"
     )
+    # A recorded divergence (registry-authored sections pending gateway
+    # adoption) must name its sections and convergence path — the #224
+    # follow-on form; an UNRECORDED divergence still reddens above.
+    if "divergence" in pin:
+        assert pin["divergence"]["sections"], "a recorded divergence names no sections"
+        assert pin["divergence"]["converges"], "a recorded divergence names no convergence path"
 
 
-def test_the_vendored_copy_declares_the_two_catalogue_component_shapes() -> None:
-    """§4.9: the two declared shapes (filter bar, catalogue meta line) are
-    declared IN the vendored copy — the c90f9f3 amendments, which main's
-    styleguide predates."""
+def test_the_vendored_copy_declares_the_catalogue_component_shapes() -> None:
+    """§4.9 + the #224 follow-on (§7): the declared shapes (filter bar,
+    catalogue meta line, records table, record page) are declared IN the
+    vendored copy. The follow-on's two are registry-authored divergences,
+    recorded in the pin, pending the gateway's authored adoption."""
     html = STYLEGUIDE.read_text(encoding="utf-8")
-    assert "Filter bar" in html and "filter-bar" in _style_block(html)
-    assert "Catalogue meta line" in html and "catalogue-meta" in _style_block(html)
+    block = _style_block(html)
+    assert "Filter bar" in html and "filter-bar" in block
+    assert "Catalogue meta line" in html and "catalogue-meta" in block
+    assert "Records table" in html and "bw-records" in block, (
+        "the records-table component declaration is missing"
+    )
+    assert "Record page" in html and "record-grid" in block, (
+        "the record-page component declaration is missing"
+    )
+    assert "pending gateway adoption" in html, (
+        "the registry-authored declarations must mark their adoption status"
+    )
 
 
 def test_the_page_css_token_block_is_the_styleguide_block_verbatim() -> None:
