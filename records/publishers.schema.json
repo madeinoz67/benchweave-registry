@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:benchweave-registry:publishers:1.0.0",
+  "$id": "urn:benchweave-registry:publishers:2.0.0",
   "title": "BenchWeave registry vetted publishers",
   "description": "Vetted publisher identities and their namespace assignments (CR-15/CR-39). A publisher identity is a GitHub identity plus a publisher name (NFR-7); nothing more is collected.",
   "type": "object",
@@ -11,7 +11,7 @@
   "additionalProperties": false,
   "properties": {
     "publishers_version": {
-      "const": 1
+      "const": 2
     },
     "publishers": {
       "type": "array",
@@ -23,7 +23,8 @@
           "namespace",
           "github",
           "vetted_at",
-          "publisher_repo_protections"
+          "publisher_repo_protections",
+          "vetting"
         ],
         "additionalProperties": false,
         "properties": {
@@ -92,6 +93,40 @@
               }
             },
             "description": "The signing key's validity window; with a trusted timestamp, validity is judged at the TSA-attested signing time."
+          },
+          "vetting": {
+            "type": "object",
+            "required": [
+              "checklist_id",
+              "checklist_version",
+              "cited_rows",
+              "vetted_by"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "checklist_id": {
+                "const": "vetting-checklist"
+              },
+              "checklist_version": {
+                "const": "1"
+              },
+              "cited_rows": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^V-[0-9]{2}$"
+                },
+                "description": "The vetting-checklist rows walked for this publisher; the validity gate resolves each against vetting-checklist.md — an unknown row refuses (vetting_row_unknown:)."
+              },
+              "vetted_by": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The GitHub identity that performed the vetting — the accountable one."
+              }
+            },
+            "description": "The machine-citable vetting citation (schema v2, issue #225 slice 3): which checklist version, which rows, who walked them. Structural validity of the citation never establishes the vetting was sound — that accountability stays with vetted_by."
           }
         }
       }

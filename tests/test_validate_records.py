@@ -474,9 +474,12 @@ def test_traversal_shaped_release_dir_refuses(tmp_path: Path) -> None:
 
 
 def _yank_record() -> dict[str, Any]:
+    # Schema 1.1.0 (issue #225 slice 3): a yank record carries the release
+    # digest it governs and the status sequence it corresponds to - the
+    # pre-slice-3 shape is deliberately unrepresentable now.
     return {
         "record_type": "lifecycle",
-        "record_version": "1.0.0",
+        "record_version": "1.1.0",
         "kind": "admitted-release",
         "created_at": "2026-10-02T00:00:00Z",
         "actor": "madeinoz67",
@@ -486,6 +489,8 @@ def _yank_record() -> dict[str, Any]:
             "plugin": "dps150",
             "version": "0.1.0",
             "reason": "synthetic yank for the coherence arm",
+            "release_manifest_sha256": "d" * 64,
+            "status_sequence": 2,
         },
     }
 
