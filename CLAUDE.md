@@ -34,3 +34,12 @@
    deterministic machinery (decision A04). Agents drive the interfaces.
 5. **Attribution.** No Claude/Anthropic attribution in any commit, record,
    index row or comment.
+6. **Documentation register (ASD-STE100).** Operator- and user-facing
+   documentation — website pages, README instruction sections, guides,
+   warnings, cautions, and safety notices — is written in ASD-STE100
+   Simplified Technical English: dispatch the `document-writer` agent
+   (`.claude/agents/document-writer.md`, mirrored from the SDK repo) for any
+   documentation leg that authors or rewrites it. Internal engineering
+   records (design records, review rubrics, lane rules, tracker text) keep
+   the engineering register and are out of scope. Never change technical
+   content to obey a register rule.
