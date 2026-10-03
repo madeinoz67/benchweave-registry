@@ -1043,3 +1043,19 @@ def test_the_fired_posture_pins_the_three_spec_rects_byte_exactly() -> None:
         assert rect in wordmark, "a spec bar rendered outside the wordmark block"
     # the gateway weave is GONE in the fired variant (the mark replaces it)
     assert "L17 7 L7 17" not in wordmark, "the fired wordmark kept the gateway weave"
+
+
+def test_the_family_links_are_present_on_both_page_kinds() -> None:
+    """Owner 2026-10-03: the registry site was a one-way trip — the way back to
+    the main site and the SDK site is part of the header on every generated
+    page (index and record), external, noopener, arrow-marked like the
+    repository link. Both domains verified live before hardcoding."""
+    page = _render(FIXTURE.read_bytes())
+    record_tpl = (REPO / "catalogue" / "record.template.html").read_text(encoding="utf-8")
+    for href in ("https://www.benchweave.dev/", "https://sdk.benchweave.dev/"):
+        assert f'href="{href}"' in page, f"family link missing from the index page: {href}"
+        assert f'href="{href}"' in record_tpl, f"family link missing from record pages: {href}"
+    for markup in (page, record_tpl):
+        for href in ("https://www.benchweave.dev/", "https://sdk.benchweave.dev/"):
+            i = markup.index(f'href="{href}"')
+            assert 'rel="noopener"' in markup[i : i + 200], f"family link without noopener: {href}"
