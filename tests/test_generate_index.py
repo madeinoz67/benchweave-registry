@@ -508,3 +508,135 @@ def test_directory_shaped_status_refuses_instead_of_reading_as_absent(
     )
     assert "index_status_unparseable:" in result.stderr, result.stderr
     assert "Traceback" not in result.stderr, "a bare traceback instead of a typed refusal"
+
+
+# ── the unlist arm (issue #225 slice 3, CR-32/E4) ─────────────────────────────
+#
+# Unlist is RECORD-DRIVEN and catalogue-only: an unlist record drops the row
+# at regeneration while the status document is NEVER touched — the release
+# stays resolvable and admissible (discovery stops offering it; admission
+# still accepts it). The polarity trap the design's risk §7.5 names: a cell
+# that drops the row by flipping status fails. The generator continues to
+# honour status documents ONLY for yank/revoked (Q8) — a yank record alone
+# keeps the row (the validity gate's pair check refuses that incoherence,
+# not the generator).
+
+
+def _unlist_record(
+    root: Path, plugin: str = "alpha-tool", version: str = "1.0.0"
+) -> Path:
+    record_dir = (
+        root / "records" / "lifecycle" / "northwind-instruments" / plugin / version
+    )
+    record_dir.mkdir(parents=True, exist_ok=True)
+    record = {
+        "record_type": "lifecycle",
+        "record_version": "1.1.0",
+        "kind": "in-tree-fixture",
+        "created_at": "2026-10-02T00:00:00Z",
+        "actor": "madeinoz67",
+        "lifecycle": {
+            "op": "unlist",
+            "publisher": "northwind-instruments",
+            "plugin": plugin,
+            "version": version,
+            "reason": "catalogue-only removal fixture",
+        },
+    }
+    path = record_dir / "1-unlist.json"
+    path.write_bytes(_canon(record))
+    return path
+
+
+def test_unlist_record_with_published_status_drops_the_row(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    release = _fixture_release(root, status={"lifecycle": "published"})
+    status_bytes = (release / "status.json").read_bytes()
+    _unlist_record(root)
+    assert _row_ids(root) == []
+    # CR-32/E4: the status document is untouched — the release stays
+    # admissible; only the catalogue row is gone.
+    assert (release / "status.json").read_bytes() == status_bytes
+
+
+def test_unlist_record_with_no_status_drops_the_row(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    _fixture_release(root)
+    _unlist_record(root)
+    assert _row_ids(root) == []
+
+
+def test_unlist_record_with_deprecated_status_drops_the_row(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    _fixture_release(root, status={"lifecycle": "deprecated"})
+    _unlist_record(root)
+    assert _row_ids(root) == []
+
+
+def test_unlist_record_with_yanked_status_drops_the_row(tmp_path: Path) -> None:
+    """Both mechanisms agree on this cell: record-driven drop + status drop."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    _fixture_release(root, status={"lifecycle": "yanked"})
+    _unlist_record(root)
+    assert _row_ids(root) == []
+
+
+def test_yank_record_alone_keeps_the_row(tmp_path: Path) -> None:
+    """Q8 pin: the generator honours status documents only — a yank RECORD
+    without a governing status.json does not drop the row here (the validity
+    gate's yank_status_absent refuses that incoherence in records CI)."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    _fixture_release(root)
+    record_dir = (
+        root / "records" / "lifecycle" / "northwind-instruments" / "alpha-tool" / "1.0.0"
+    )
+    record_dir.mkdir(parents=True)
+    record_dir.joinpath("1-yank.json").write_bytes(
+        _canon(
+            {
+                "record_type": "lifecycle",
+                "record_version": "1.1.0",
+                "kind": "in-tree-fixture",
+                "created_at": "2026-10-02T00:00:00Z",
+                "actor": "madeinoz67",
+                "lifecycle": {
+                    "op": "yank",
+                    "publisher": "northwind-instruments",
+                    "plugin": "alpha-tool",
+                    "version": "1.0.0",
+                    "reason": "ungoverned yank fixture (Q8 pin)",
+                    "release_manifest_sha256": "d" * 64,
+                    "status_sequence": 2,
+                },
+            }
+        )
+    )
+    assert _row_ids(root) == ["northwind-instruments/alpha-tool"]
+
+
+def test_unlist_record_without_regeneration_refuses(tmp_path: Path) -> None:
+    """CR-21 over the unlist path: the record lands, the index regenerates,
+    and a --check against the stale committed index refuses."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    _fixture_release(root, status={"lifecycle": "published"})
+    first = _run("--root", str(root))
+    assert first.returncode == 0, first.stderr
+    _unlist_record(root)
+    check = _run("--check", "--root", str(root))
+    assert check.returncode == 1, check.stdout + check.stderr
+    assert "index_drift" in check.stderr
+
+
+def test_unlist_record_does_not_drop_sibling_rows(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    _fixture_release(root, plugin="alpha-tool", status={"lifecycle": "published"})
+    _fixture_release(root, plugin="beta-tool")
+    _unlist_record(root, plugin="alpha-tool")
+    assert _row_ids(root) == ["northwind-instruments/beta-tool"]

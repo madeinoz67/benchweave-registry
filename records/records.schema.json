@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:benchweave-registry:records:1.0.0",
+  "$id": "urn:benchweave-registry:records:1.1.0",
   "title": "BenchWeave registry lane records",
   "description": "Canonical-JSON review and lifecycle records committed in this repository. Structural validity does not establish trust; the records-validity CI and the admission replay are the machine checks, and identified human review is the accountable one.",
   "type": "object",
@@ -19,7 +19,11 @@
       ]
     },
     "record_version": {
-      "const": "1.0.0"
+      "enum": [
+        "1.0.0",
+        "1.1.0"
+      ],
+      "description": "The 1.1.0 enum arm (issue #225 slice 3, F4): records valid at 1.1.0 add withdraw and the per-op required blocks; every 1.0.0 record stays valid forever \u2014 no restamp."
     },
     "kind": {
       "enum": [
@@ -214,7 +218,8 @@
             "advisory",
             "unlist",
             "takedown",
-            "transfer"
+            "transfer",
+            "withdraw"
           ]
         },
         "publisher": {
@@ -297,6 +302,47 @@
         "closure_digest": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "status_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The status-document sequence this lifecycle op was recorded at (schema 1.1.0); the records-validity pair check pins ORDERING - the cited sequence must not exceed the sequence actually served, and later status rewrites (advisories after a yank) advance the served sequence without invalidating the historical record."
+        },
+        "advisory": {
+          "type": "object",
+          "required": [
+            "id",
+            "severity",
+            "summary",
+            "url"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ],
+              "description": "The vendored release-status schema's advisories severity enum (one authority; tests pin the two enums equal)."
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            }
+          },
+          "description": "The advisory this record appends to the release's status document (op advisory); the pair check requires the id in the served status's advisories[]."
         },
         "transfer": {
           "type": "object",
@@ -510,6 +556,57 @@
           "lifecycle": {
             "required": [
               "transfer"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "lifecycle"
+          },
+          "lifecycle": {
+            "properties": {
+              "op": {
+                "const": "yank"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "lifecycle": {
+            "required": [
+              "release_manifest_sha256",
+              "status_sequence"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "lifecycle"
+          },
+          "lifecycle": {
+            "properties": {
+              "op": {
+                "const": "advisory"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "lifecycle": {
+            "required": [
+              "advisory"
             ]
           }
         }

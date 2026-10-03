@@ -101,6 +101,14 @@ def tree_with(root: Path, records: dict[str, dict[str, Any]]) -> Path:
     (root / "records" / "publishers.json").write_bytes(
         (Path(__file__).resolve().parents[1] / "records" / "publishers.json").read_bytes()
     )
+    # Issue #225 slice 3: the vetting-citation arm resolves cited rows in the
+    # tree's own checklist, and the namespace arms read the tree's lane rules.
+    (root / "vetting-checklist.md").write_bytes(
+        (Path(__file__).resolve().parents[1] / "vetting-checklist.md").read_bytes()
+    )
+    (root / "lane-rules.json").write_bytes(
+        (Path(__file__).resolve().parents[1] / "lane-rules.json").read_bytes()
+    )
     for name, record in records.items():
         target = root / "records" / "submissions" / "madeinoz67" / "dps150" / "0.1.0"
         target.mkdir(parents=True, exist_ok=True)
@@ -507,9 +515,12 @@ def test_distinct_publisher_ids_still_pass(tmp_path: Path) -> None:
 
 
 def _yank_record() -> dict[str, Any]:
+    # Schema 1.1.0 (issue #225 slice 3): a yank record carries the release
+    # digest it governs and the status sequence it corresponds to - the
+    # pre-slice-3 shape is deliberately unrepresentable now.
     return {
         "record_type": "lifecycle",
-        "record_version": "1.0.0",
+        "record_version": "1.1.0",
         "kind": "admitted-release",
         "created_at": "2026-10-02T00:00:00Z",
         "actor": "madeinoz67",
@@ -519,20 +530,31 @@ def _yank_record() -> dict[str, Any]:
             "plugin": "dps150",
             "version": "0.1.0",
             "reason": "synthetic yank for the coherence arm",
+            "release_manifest_sha256": "d" * 64,
+            "status_sequence": 2,
         },
     }
 
 
 def _yank_tree_with(root: Path, status: dict[str, Any] | None) -> Path:
     """A release tree plus a canonical yank record; ``status`` plants the
-    release's status.json when given (R2's plants are deliberately minimal:
-    the records-validity gate reads the lifecycle only)."""
+    release's status.json when given (the plants carry the lifecycle and the
+    sequence — the slice-3 pairing reads both)."""
     manifest_path = _mini_release(root, [], None)
     yank_dir = root / "records" / "lifecycle" / "madeinoz67" / "dps150" / "0.1.0"
     yank_dir.mkdir(parents=True, exist_ok=True)
     (yank_dir / "2-yank.json").write_bytes(vr.canonical_bytes(_yank_record()))
+    # Fold rows 3+8: a tree with records must carry its authorities.
+    repo = Path(__file__).resolve().parents[1]
+    (root / "records" / "publishers.json").write_bytes(
+        (repo / "records" / "publishers.json").read_bytes()
+    )
+    for name in ("lane-rules.json", "vetting-checklist.md"):
+        (root / name).write_bytes((repo / name).read_bytes())
     if status is not None:
-        (manifest_path.parent / "status.json").write_bytes(vr.canonical_bytes(status))
+        planted = dict(status)
+        planted.setdefault("sequence", 2)
+        (manifest_path.parent / "status.json").write_bytes(vr.canonical_bytes(planted))
     return root
 
 
@@ -544,7 +566,7 @@ def test_yank_record_without_a_status_document_is_refused(tmp_path: Path) -> Non
     still honours only status documents, never yank records."""
     _yank_tree_with(tmp_path, None)
     findings = vr.validate_tree(tmp_path)
-    assert any(f.startswith("yank_record_without_status:") for f in findings), findings
+    assert any(f.startswith("yank_status_absent:") for f in findings), findings
 
 
 def test_yank_record_with_a_published_status_document_is_refused(tmp_path: Path) -> None:
@@ -552,7 +574,7 @@ def test_yank_record_with_a_published_status_document_is_refused(tmp_path: Path)
     yanked-or-revoked does not govern the yank."""
     _yank_tree_with(tmp_path, {"lifecycle": "published"})
     findings = vr.validate_tree(tmp_path)
-    assert any(f.startswith("yank_record_without_status:") for f in findings), findings
+    assert any(f.startswith("yank_status_absent:") for f in findings), findings
 
 
 def test_yank_record_with_a_yanked_status_document_passes(tmp_path: Path) -> None:

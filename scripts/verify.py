@@ -53,6 +53,24 @@ def _publisher_keys(root: Path) -> dict[str, Ed25519PublicKey]:
     return keys
 
 
+def _lifecycle_events(root: Path) -> dict[tuple[str, str, str], list[dict[str, str]]]:
+    """C6 (issue #225 slice 3): each release's lifecycle event timeline,
+    from the already-validated records — ops, actors, timestamps."""
+    events: dict[tuple[str, str, str], list[dict[str, str]]] = {}
+    for path in vr.record_paths(root / "records"):
+        parsed = json.loads(path.read_bytes())
+        if parsed.get("record_type") != "lifecycle":
+            continue
+        lifecycle = parsed.get("lifecycle", {})
+        key = (lifecycle.get("publisher"), lifecycle.get("plugin"), lifecycle.get("version"))
+        events.setdefault(key, []).append(
+            {
+                "op": str(lifecycle.get("op")),
+                "actor": str(parsed.get("actor")),
+                "at": str(parsed.get("created_at")),
+            }
+        )
+    return events
 def release_signature_verifies(
     root: Path, publisher_id: str, release_dir: Path
 ) -> bool:
@@ -85,6 +103,7 @@ def verify_releases(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
     keys = _publisher_keys(root)
     reviews = _load_reviews(root)
     publishes = _publish_records(root)
+    lifecycle_events = _lifecycle_events(root)
     for manifest_path in sorted(releases_dir.rglob("manifest.json")):
         parts = manifest_path.relative_to(releases_dir).parts
         if len(parts) != 5:
@@ -157,6 +176,7 @@ def verify_releases(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
                 "capability_declaration": record.get("review", {}).get(
                     "capability_declaration"
                 ),
+                "lifecycle_events": lifecycle_events.get((publisher, plugin, version), []),
             }
         )
     return findings, chains
@@ -211,10 +231,11 @@ def main(argv: list[str] | str | None = None) -> int:
             f"reviewed_by={chain['reviewer']} outcome={chain['outcome']} "
             f"signature={chain['signature_state']} "
             f"closure={chain['closure_digest'][:12]}… "
-            f"capabilities={json.dumps(chain['capability_declaration'], sort_keys=True)}"
+            f"capabilities={json.dumps(chain['capability_declaration'], sort_keys=True)} "
+            f"lifecycle={','.join(event['op'] for event in chain['lifecycle_events']) or '-'}"
         )
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))
