@@ -34,8 +34,9 @@
    deterministic machinery (decision A04). Agents drive the interfaces.
 5. **Attribution.** No Claude/Anthropic attribution in any commit, record,
    index row or comment.
-6. **Documentation register (ASD-STE100).** Operator- and user-facing
-   documentation — website pages, README instruction sections, guides,
+6. **Documentation register (ASD-STE100).** Operator-, user- and
+   developer-facing published documentation — website pages, README
+   instruction sections, developer- and user-facing guides,
    warnings, cautions, and safety notices — is written in ASD-STE100
    Simplified Technical English: dispatch the `document-writer` agent
    (`.claude/agents/document-writer.md`, mirrored from the SDK repo) for any
