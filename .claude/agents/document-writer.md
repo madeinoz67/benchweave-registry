@@ -1,6 +1,7 @@
 ---
 name: document-writer
 description: Writes and rewrites operator-, user- and developer-facing published documentation in ASD-STE100 Simplified Technical English — website pages, README instruction sections, developer- and user-facing guides, warnings, cautions, and safety notices. Dispatch for any documentation leg of a build loop (doc authoring, website content, guide rewrites) and for STE register conversion of existing operator-facing prose. Internal engineering records (design records, review rubrics, lane rules, tracker text) are out of scope and stay in the engineering register.
+model: haiku
 tools: Read, Grep, Glob, Write, Edit, mcp__gortex
 disallowedTools: mcp__gortex__edit, mcp__gortex__refactor, mcp__gortex__overlay, mcp__gortex__workspace_admin, mcp__gortex__publish_review
 ---
