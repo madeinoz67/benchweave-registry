@@ -62,14 +62,23 @@ REPO = Path(__file__).resolve().parents[1]
 #: ``tests/test_catalogue_page.py``. One constant, two carriers.
 TRUNCATE_AT = 12
 
-#: The two slice-1 unverified markers' display strings (CR-37/NFR-S1). An
-#: unknown marker id renders VERBATIM — forward-honest, never dropped. This
+#: The unverified markers' display strings (CR-37/NFR-S1). An unknown marker
+#: id renders VERBATIM — forward-honest, never dropped. The third entry is
+#: slice 5's (issue #227): the marker every community-shared row carries. This
 #: map is the generation-time authority; ``catalogue/assets/plugins.js``
 #: carries a twin for cloned rows, pinned byte-equal by the page tests.
 MARKER_DISPLAY: dict[str, str] = {
     "conformance-evidence-self-attested": "conformance evidence self-attested",
     "review-is-process-not-proof": "review is process, not proof",
+    "community-shared-not-reviewed": "shared by the author, not reviewed",
 }
+
+#: CR-57 (issue #227 slice 5): a community-shared row's marker is STRUCTURAL.
+#: It derives from the row's KIND, never from the row's own marker list alone,
+#: so no shared row can render without it — an empty or foreign list still
+#: renders the marker. The JS ``rowMarkers`` is the twin.
+SHARED_KIND = "community-shared"
+SHARED_MARKER = "community-shared-not-reviewed"
 
 #: The record page's marker EXPLANATIONS (§2.6) — a SINGLE-CARRIER map
 #: (record pages are static; no JS clones them), seeded with the mockup's
@@ -350,11 +359,20 @@ def _sig_cell(row: dict[str, Any], *, blank: bool = False) -> str:
     )
 
 
+def row_markers(row: dict[str, Any]) -> list[str]:
+    """The markers a row renders: its own list, plus the shared marker first
+    when the row is community-shared and its list does not carry it."""
+    markers = [str(marker) for marker in row.get("unverified_markers") or []]
+    if row.get("kind") == SHARED_KIND and SHARED_MARKER not in markers:
+        markers.insert(0, SHARED_MARKER)
+    return markers
+
+
 def _markers_text(row: dict[str, Any]) -> str:
-    markers = row.get("unverified_markers") or []
+    markers = row_markers(row)
     if not markers:
         return ""
-    joined = "; ".join(MARKER_DISPLAY.get(str(m), str(m)) for m in markers)
+    joined = "; ".join(MARKER_DISPLAY.get(marker, marker) for marker in markers)
     return f"Unverified: {joined}"
 
 

@@ -1,5 +1,5 @@
 {
-  "comment": "Synthetic 11-row catalogue fixture for the issue #224 slice-2 search truth (CR-24's own denominator) grown by the #224 follow-on with one hardware-evidence row (the evidence facet's discriminator; the slice-2 ten rows carried only structural/simulated/none). Invented names only. Rows are shaped exactly like the registry's generated index rows (records/index.schema.json) and sorted by package_id as the generator sorts. This file is search TEST DATA — it is not a registry of record and never renders on the site.",
+  "comment": "Synthetic 11-row catalogue fixture for the issue #224 slice-2 search truth (CR-24's own denominator) grown by the #224 follow-on with one hardware-evidence row (the evidence facet's discriminator; the slice-2 ten rows carried only structural/simulated/none). Invented names only. Rows are shaped exactly like the registry's generated index rows (records/index.schema.json) and sorted by package_id as the generator sorts. Issue #227 slice 5: the two community-shared rows carry the shape the generator emits for a shared listing (unsigned, no evidence, no maintenance state, the unverified marker community-shared-not-reviewed, a pinned source); the slice-2 placeholder shape, which had one of them signed with evidence, is gone and the truth table was re-derived by hand for it. This file is search TEST DATA — it is not a registry of record and never renders on the site.",
   "index_version": 1,
   "generated_from": {
     "records_tree": "records/",
@@ -138,7 +138,7 @@
       "manifest_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
       "signature_state": "unsigned",
       "timestamp": null,
-      "timestamp_recommended": true,
+      "timestamp_recommended": false,
       "display_name": "Harborline PWM generator",
       "summary": "Shared pulse-width generator.",
       "licence_spdx": "BSD-3-Clause",
@@ -157,12 +157,10 @@
       },
       "transport_triples": [],
       "source_revision": "0000000000000000000000000000000000000009",
-      "gateway_ref": "0000000000000000000000000000000000000009",
+      "source_url": "https://github.com/harborline-example/harborline-pwm",
+      "gateway_ref": null,
       "firmware_attestation": null,
-      "unverified_markers": [
-        "conformance-evidence-self-attested",
-        "review-is-process-not-proof"
-      ]
+      "unverified_markers": ["community-shared-not-reviewed"]
     },
     {
       "registry_id": "benchweave-registry",
@@ -206,9 +204,9 @@
       "kind": "community-shared",
       "publisher": "harborline-systems",
       "manifest_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
-      "signature_state": "signed-valid",
+      "signature_state": "unsigned",
       "timestamp": null,
-      "timestamp_recommended": true,
+      "timestamp_recommended": false,
       "display_name": "Harborline relay sixteen",
       "summary": "Shared relay build with sixteen channels.",
       "licence_spdx": "BSD-3-Clause",
@@ -217,14 +215,8 @@
         "otdp_versions": ["0.2.2"],
         "stg_versions": ["1.4"]
       },
-      "evidence": [
-        {
-          "level": "simulated",
-          "report_path": "evidence/relay16-evidence.md",
-          "result": "partial"
-        }
-      ],
-      "maintenance": "maintained",
+      "evidence": [],
+      "maintenance": "unknown",
       "advisories": [],
       "capabilities": {
         "filesystem_writes_beyond_evidence_retention": false,
@@ -233,13 +225,10 @@
       },
       "transport_triples": [],
       "source_revision": "0000000000000000000000000000000000000008",
-      "gateway_ref": "0000000000000000000000000000000000000008",
+      "source_url": "https://github.com/harborline-example/harborline-relay16",
+      "gateway_ref": null,
       "firmware_attestation": null,
-      "unverified_markers": [
-        "conformance-evidence-self-attested",
-        "review-is-process-not-proof",
-        "community-shared-not-vetted"
-      ]
+      "unverified_markers": ["community-shared-not-reviewed"]
     },
     {
       "registry_id": "benchweave-registry",

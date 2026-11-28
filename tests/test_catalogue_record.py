@@ -221,11 +221,14 @@ def test_the_marker_explanation_map_is_single_carrier() -> None:
     assert "MARKER_EXPLANATION" not in plugins_js, (
         "the explanation map grew a JS twin — record pages are static by design"
     )
-    row = _row("harborline-systems/harborline-relay16")  # carries the unknown marker
+    # The unknown id is planted on an admitted row: since issue #227 slice 5
+    # the fixture's shared rows carry only the shared marker (a known one).
+    row = _row("northwind-instruments/northwind-psu")
+    row["unverified_markers"] = list(row["unverified_markers"]) + ["future-marker-unmapped"]
     page = _render_record(row, FILES)
-    assert "community-shared-not-vetted" in page
+    assert "future-marker-unmapped" in page
     unknown_row = re.search(
-        r'<span class="badge badge-warning mono">community-shared-not-vetted'
+        r'<span class="badge badge-warning mono">future-marker-unmapped'
         r"</span>(.*?)</span>",
         page,
         re.DOTALL,

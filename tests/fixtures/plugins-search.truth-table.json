@@ -1,5 +1,5 @@
 {
-  "comment": "Hand-derived search truth table for the issue #224 slice-2 catalogue (B1, CR-24), grown by the #224 follow-on (evidence dimension + hardware row, re-derived by hand from the grown fixture BEFORE any predicate code moved — the C1 discipline). Every case names a dimension arm, the query, and the exactly-expected set of package ids (sorted). An empty query dimension means no filter on it. The truth is evaluated by tests/run_search_spec.mjs against catalogue/assets/plugins.js filterRows; internal consistency (expected ids exist in the fixture; every dimension covered; the negative and combined arms present) is pinned by tests/test_catalogue_search.py.",
+  "comment": "Hand-derived search truth table for the issue #224 slice-2 catalogue (B1, CR-24), grown by the #224 follow-on (evidence dimension + hardware row, re-derived by hand from the grown fixture BEFORE any predicate code moved — the C1 discipline). Every case names a dimension arm, the query, and the exactly-expected set of package ids (sorted). An empty query dimension means no filter on it. The truth is evaluated by tests/run_search_spec.mjs against catalogue/assets/plugins.js filterRows; internal consistency (expected ids exist in the fixture; every dimension covered; the negative and combined arms present) is pinned by tests/test_catalogue_search.py. Issue #227 slice 5 (v3): the fixture's two community-shared rows took the shape the generator emits for a shared listing (unsigned, no evidence, no maintenance state), so the seven signature, maintenance, evidence and combined arms they touched were re-derived BY HAND from that shape before the fixture moved; the combined-text-and-signature arm was re-targeted to stay discriminating, and one combined kind arm was added (E3). The predicate did not change.",
   "fixture": "plugins-index.fixture.json",
   "cases": [
     {
@@ -154,7 +154,6 @@
         "copperleaf-labs/copperleaf-daq",
         "copperleaf-labs/copperleaf-shunt",
         "copperleaf-labs/copperleaf-therm",
-        "harborline-systems/harborline-relay16",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu",
@@ -168,6 +167,7 @@
       "expect": [
         "harborline-systems/harborline-pwm",
         "harborline-systems/harborline-relay",
+        "harborline-systems/harborline-relay16",
         "northwind-instruments/northwind-cal"
       ]
     },
@@ -178,7 +178,6 @@
       "expect": [
         "copperleaf-labs/copperleaf-therm",
         "harborline-systems/harborline-relay",
-        "harborline-systems/harborline-relay16",
         "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-load",
         "northwind-instruments/northwind-psu"
@@ -203,6 +202,7 @@
       "expect": [
         "copperleaf-labs/copperleaf-shunt",
         "harborline-systems/harborline-pwm",
+        "harborline-systems/harborline-relay16",
         "northwind-instruments/northwind-fixture"
       ]
     },
@@ -301,7 +301,13 @@
     {
       "id": "combined-text-and-signature",
       "dimension": "combined",
-      "query": {"text": "harborline", "signature_state": "signed-valid"},
+      "query": {"text": "northwind", "signature_state": "unsigned"},
+      "expect": ["northwind-instruments/northwind-cal"]
+    },
+    {
+      "id": "combined-text-and-kind-separates-a-shared-listing-from-an-admitted-release",
+      "dimension": "combined",
+      "query": {"text": "relay", "kind": "community-shared"},
       "expect": ["harborline-systems/harborline-relay16"]
     },
     {
@@ -361,7 +367,6 @@
       "expect": [
         "copperleaf-labs/copperleaf-shunt",
         "copperleaf-labs/copperleaf-therm",
-        "harborline-systems/harborline-relay16",
         "northwind-instruments/northwind-cal",
         "northwind-instruments/northwind-fixture",
         "northwind-instruments/northwind-psu",
