@@ -638,3 +638,108 @@ def test_a_publish_record_that_pins_other_bytes_governs_no_release(
     findings = vr.validate_tree(tree.root)
     assert any(finding.startswith("release_digest_mismatch:") for finding in findings), findings
     assert _reverse_finding(findings, key), findings
+
+
+# ── PR #46 fold wave 1, finding 2: dev lineage is a registry id ─────────────
+#
+# CR-35's records half refused any record containing "dev-" anywhere, so a
+# shared listing whose source URL merely contained "dev-tools-inc" refused the
+# whole tree. The arm matches the dev- PREFIX against the record's registry-id
+# fields only, the same two reads the releases half makes. The records schema
+# admits no registry-id member (every object is closed, and the SDK's
+# closure-diff writer emits package ids): a valid record carries none, so the
+# arm fires only on a record that does. A URL, a display name or free text
+# that merely contains "dev-" is not lineage.
+
+DEV_MENTIONS = [
+    ("source_url", "https://github.com/dev-tools-inc/relay"),
+    ("display_name", "Anchor meter (dev-kit build)"),
+    ("summary", "Built against dev-local benches."),
+    ("reason", "shared from the dev-tools-inc org"),
+    ("review_notes", "depends on dev-local/mutant"),
+]
+
+
+def _plant_dev_mention(tree: ThreeKindTree, where: str, value: str) -> Path:
+    """Put the string where the ruling says it is NOT lineage: a source URL, a
+    display name, or free text. ``source_url`` names the index row's field; on
+    the record the URL lives at ``lifecycle.shared.source.url``."""
+    if where == "review_notes":
+        record = review_record(UNLISTED)
+        record["review"]["notes"] = value
+        return write_review(tree.root, record)
+    path = tree.share_record_path()
+    if where == "reason":
+        _rewrite(path, with_lifecycle(tree.read_record(path), reason=value))
+    elif where == "source_url":
+        _rewrite(
+            path,
+            with_shared(tree.read_record(path), source={"url": value, "revision": REVISION}),
+        )
+    else:
+        _rewrite(path, with_shared(tree.read_record(path), **{where: value}))
+    return path
+
+
+@pytest.mark.parametrize(("where", "value"), DEV_MENTIONS)
+def test_a_listing_that_merely_mentions_dev_is_not_dev_lineage(
+    tmp_path: Path, where: str, value: str
+) -> None:
+    """Finding 2 (LOW). A URL, a display name or free text containing "dev-"
+    is not a registry id and must not refuse the tree. RED on 971a5b5: every
+    plant was refused with dev_lineage_in_records."""
+    tree = _tree(tmp_path)
+    _plant_dev_mention(tree, where, value)
+    assert "dev-" in value, "precondition: the plant carries the substring"
+    assert vr.validate_tree(tree.root) == []
+
+
+@pytest.mark.parametrize("plant", ["own", "dependency"])
+def test_a_dev_prefixed_registry_id_on_a_record_is_refused(tmp_path: Path, plant: str) -> None:
+    """Control (PIN, refused before and after): a record whose own registry id,
+    or a dependency's, starts with dev- is refused by the lineage arm. The
+    records schema admits no registry-id member, so the plant is an extra
+    member: the schema refuses it and the lineage arm refuses it too."""
+    tree = _tree(tmp_path)
+    path = tree.share_record_path()
+    record = tree.read_record(path)
+    if plant == "own":
+        record["registry_id"] = "dev-local"
+    else:
+        record["dependencies"] = [
+            {
+                "registry_id": "dev-local",
+                "package_id": "dev/widget",
+                "version": "0.1.0",
+                "manifest_sha256": "0" * 64,
+            }
+        ]
+    _rewrite(path, record)
+    findings = vr.validate_tree(tree.root)
+    assert any(finding.startswith("dev_lineage_in_records:1-share.json") for finding in findings), (
+        findings
+    )
+
+
+@pytest.mark.parametrize("plant", ["own", "dependency"])
+def test_a_normal_registry_id_on_a_record_is_not_dev_lineage(tmp_path: Path, plant: str) -> None:
+    """The arm matches the PREFIX, not the member's presence (PIN): a record
+    carrying a normal registry id is not dev lineage. The schema still refuses
+    the extra member; the lineage arm does not."""
+    tree = _tree(tmp_path)
+    path = tree.share_record_path()
+    record = tree.read_record(path)
+    if plant == "own":
+        record["registry_id"] = "benchweave-registry"
+    else:
+        record["dependencies"] = [
+            {
+                "registry_id": "benchweave-registry",
+                "package_id": "madeinoz67/dps150-descriptor",
+                "version": "0.1.0",
+                "manifest_sha256": "0" * 64,
+            }
+        ]
+    _rewrite(path, record)
+    findings = vr.validate_tree(tree.root)
+    assert not any(finding.startswith("dev_lineage_in_records:") for finding in findings), findings

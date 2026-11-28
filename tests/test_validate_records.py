@@ -259,12 +259,21 @@ def test_review_record_digest_mismatch_is_refused(tmp_path: Path) -> None:
 
 
 def test_dev_prefixed_registry_id_in_record_is_refused(tmp_path: Path) -> None:
-    """CR-35's records half: dev-unsigned lineage never reaches a committed record."""
+    """CR-35's records half: dev-unsigned lineage never reaches a committed record.
+
+    Issue #227 fold wave 1: the dev- prefix is matched against the record's
+    registry-id fields, never against free text, so the dev id is planted
+    where a registry id lives. The records schema admits no such member and
+    refuses it too; the lineage arm keeps reading it, so both refuse. Until
+    this fold the plant was a dev id inside ``review.notes``, a free-text
+    mention that is not lineage (tests/test_issue227_arms.py now asserts the
+    other way for that plant)."""
     record = review_record()
-    record["review"]["notes"] = "depends on dev-local/mutant"
+    record["registry_id"] = "dev-local"
     tree_with(tmp_path, {"review-1.json": record})
     findings = vr.validate_tree(tmp_path)
     assert any(f.startswith("dev_lineage_in_records:") for f in findings), findings
+    assert any("record_schema_invalid" in f for f in findings), findings
 
 
 def test_main_returns_zero_on_valid_tree(
