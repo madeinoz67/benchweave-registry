@@ -7,12 +7,22 @@ refuses a committed index that differs — a records change without regeneration
 fails CI (the CR-21 falsifier), and a hand-edited index row is caught the same
 way. The format lives in ``records/index.schema.json``; the website slice
 RENDERS this index and never reshapes it.
+
+Issue #227 slice 5 (CR-56/CR-57, Q20): the index also carries
+``community-shared`` rows, generated from share records under
+``records/lifecycle/`` — a listing carries no release, so everything on its
+row is author-declared and it is built here from the record alone. A shared
+takedown record drops the row. And a row's kind is generated from a record,
+never defaulted: a release whose records carry no kind tag refuses
+(``index_kind_untagged:``) instead of landing in the catalogue as an admitted
+release.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -29,6 +39,22 @@ _UNVERIFIED_MARKERS = [
     "conformance-evidence-self-attested",
     "review-is-process-not-proof",
 ]
+
+#: CR-57 (issue #227 slice 5): the one unverified marker a community-shared
+#: row carries. The slice-1 markers describe reviewed releases (self-attested
+#: conformance evidence, review as process); a listing has neither a review
+#: nor evidence, so it carries only its own. The index schema REQUIRES it on
+#: every community-shared row — absence is unrepresentable in the format.
+SHARED_MARKER = "community-shared-not-reviewed"
+
+#: CR-56: the kind a shared listing wears. A release is never
+#: ``community-shared`` — sharing is not an admission path.
+SHARED_KIND = "community-shared"
+
+#: The repository of record's own origin id. A release reads its registry id
+#: from its path under ``releases/``; a listing has no path segment, so its
+#: row and record page sit under this one.
+REGISTRY_ID = "benchweave-registry"
 
 #: The release-status schema this repository vendors (digest-pinned against
 #: the gateway's standards/registry/0.1.1 origin — see
@@ -65,6 +91,8 @@ def _index_schema() -> jsonschema.Draft202012Validator:
 
 
 def _publish_records(root: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
+    """Each release's publish record — the WHOLE record, not its lifecycle
+    block: the kind tag rides the record's top level (issue #227 slice 5)."""
     publishes: dict[tuple[str, str, str], dict[str, Any]] = {}
     for path in record_paths(root / "records"):
         parsed = json.loads(path.read_bytes())
@@ -74,7 +102,7 @@ def _publish_records(root: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
         if lifecycle.get("op") != "publish":
             continue
         key = (lifecycle.get("publisher"), lifecycle.get("plugin"), lifecycle.get("version"))
-        publishes[key] = lifecycle
+        publishes[key] = parsed
     return publishes
 
 
@@ -120,11 +148,150 @@ def _maintenance(publish: dict[str, Any]) -> str:
     return "unknown"
 
 
+def _record_order(path: Path) -> tuple[str, int, str]:
+    """Numeric-aware record order: ``10-share`` sorts after ``2-share``."""
+    match = re.search(r"(\d+)", path.stem)
+    return (str(path.parent), int(match.group(1)) if match else 0, path.name)
+
+
+def _shares(root: Path) -> dict[tuple[str, str, str], list[tuple[Path, dict[str, Any]]]]:
+    """Every share record at each key, in record order (issue #227 slice 5).
+
+    More than one at a key is the validity gate's refusal
+    (``shared_listing_duplicate:``); the generator lists them so it can refuse
+    to pick, never silently serve the first.
+    """
+    shares: dict[tuple[str, str, str], list[tuple[Path, dict[str, Any]]]] = {}
+    for path in record_paths(root / "records"):
+        parsed = json.loads(path.read_bytes())
+        if parsed.get("record_type") != "lifecycle":
+            continue
+        lifecycle = parsed.get("lifecycle", {})
+        if lifecycle.get("op") != "share":
+            continue
+        key = (lifecycle.get("publisher"), lifecycle.get("plugin"), lifecycle.get("version"))
+        shares.setdefault(key, []).append((path, lifecycle))
+    for records in shares.values():
+        records.sort(key=lambda item: _record_order(item[0]))
+    return shares
+
+
+def _taken_down(root: Path) -> set[tuple[str, str, str]]:
+    """Keys carrying a lifecycle takedown record (issue #227 slice 5, Q20).
+
+    A shared listing has no status document, so its takedown is the one
+    record-driven drop beside unlist. The set is kind-blind on purpose: a
+    takedown record parked on a listing's key drops the row whichever kind it
+    wears. The wrong-kind record is the validity gate's refusal
+    (``shared_listing_conflict:``), and the generator failing closed is the
+    row disappearing, never a taken-down listing still being offered. Release
+    rows never consult this set — their drop stays status-driven (Q8).
+    """
+    taken_down: set[tuple[str, str, str]] = set()
+    for path in record_paths(root / "records"):
+        parsed = json.loads(path.read_bytes())
+        if parsed.get("record_type") != "lifecycle":
+            continue
+        lifecycle = parsed.get("lifecycle", {})
+        if lifecycle.get("op") != "takedown":
+            continue
+        taken_down.add(
+            (lifecycle.get("publisher"), lifecycle.get("plugin"), lifecycle.get("version"))
+        )
+    return taken_down
+
+
+def _shared_row(key: tuple[str, str, str], path: Path, lifecycle: dict[str, Any]) -> dict[str, Any]:
+    """One community-shared row, built from the share record alone.
+
+    Everything author-declared is carried verbatim (display name, summary,
+    licence, compatibility, capabilities, the pinned source). Everything the
+    registry would otherwise read from a release, a status document or a
+    submission is empty: a listing has none, and the index schema refuses a
+    shared row that claims any of it. The row's digest is the canonical share
+    record's — the only bytes the registry holds for a listing.
+    """
+    publisher, plugin, version = key
+    shared = lifecycle.get("shared", {})
+    source = shared.get("source", {})
+    compatibility = shared.get("compatibility", {})
+    capabilities = shared.get("capabilities", {})
+    return {
+        "registry_id": REGISTRY_ID,
+        "package_id": f"{publisher}/{plugin}",
+        "version": version,
+        "kind": SHARED_KIND,
+        "publisher": publisher,
+        "manifest_sha256": sha256_hex(path.read_bytes()),
+        "signature_state": "unsigned",
+        "timestamp": None,
+        "timestamp_recommended": False,
+        "display_name": shared.get("display_name", plugin),
+        "summary": shared.get("summary", ""),
+        "licence_spdx": shared.get("licence_spdx", "unknown"),
+        "compatibility": {
+            name: list(compatibility.get(name) or [])
+            for name in ("otdp_versions", "adapter_api_versions", "stg_versions")
+        },
+        "evidence": [],
+        "maintenance": "unknown",
+        "advisories": [],
+        "capabilities": {
+            name: bool(capabilities.get(name))
+            for name in (
+                "network_egress",
+                "subprocess_or_native_library",
+                "filesystem_writes_beyond_evidence_retention",
+            )
+        },
+        "transport_triples": [],
+        "source_revision": source.get("revision", "0" * 40),
+        "source_url": source.get("url", ""),
+        "gateway_ref": None,
+        "firmware_attestation": None,
+        "unverified_markers": [SHARED_MARKER],
+    }
+
+
+def _release_kind(
+    row_id: str, review_record: dict[str, Any], publish: dict[str, Any]
+) -> tuple[str | None, str | None]:
+    """``(kind, problem)`` — exactly one is set.
+
+    CR-56: the kind is generated from a record. The pre-slice generator
+    defaulted a release with no kind-carrying record to ``admitted-release``,
+    so a release directory with no records reached the catalogue as an
+    admitted release. One release wears one kind, and never the shared kind.
+    """
+    kinds = sorted(
+        {
+            str(record["kind"])
+            for record in (review_record, publish)
+            if record.get("kind") is not None
+        }
+    )
+    if not kinds:
+        return None, (
+            f"index_kind_untagged:{row_id}: no record carries a kind tag — a "
+            "row's kind is generated from a record, never defaulted (CR-56)"
+        )
+    if len(kinds) > 1:
+        return None, f"index_kind_conflict:{row_id}: the release's records carry kinds {kinds}"
+    if kinds[0] == SHARED_KIND:
+        return None, (
+            f"index_kind_shared_release:{row_id}: a release cannot be kind "
+            f"{SHARED_KIND} — sharing is not an admission path (CR-57)"
+        )
+    return kinds[0], None
+
+
 def generate(root: Path) -> bytes:
     """The canonical index bytes for the committed trees; pure and offline."""
     reviews = _reviews(root)
     publishes = _publish_records(root)
     unlisted = _unlisted(root)
+    shares = _shares(root)
+    taken_down = _taken_down(root)
     rows: list[dict[str, Any]] = []
     problems: list[str] = []
     seen_rows: set[tuple[str, str, str]] = set()
@@ -240,6 +407,11 @@ def generate(root: Path) -> bytes:
             review_record = reviews.get((publisher, plugin, version), {})
             review = review_record.get("review", {})
             publish = publishes.get((publisher, plugin, version), {})
+            publish_block: dict[str, Any] = publish.get("lifecycle", {})
+            kind, kind_problem = _release_kind(row_id, review_record, publish)
+            if kind_problem is not None:
+                problems.append(kind_problem)
+                continue
             submission_path = (
                 root / "records" / "submissions" / publisher / plugin / version
                 / "artefacts" / "submission.json"
@@ -252,15 +424,17 @@ def generate(root: Path) -> bytes:
                     "registry_id": manifest.get("registry_id", parts[0]),
                     "package_id": manifest["package_id"],
                     "version": manifest["version"],
-                    "kind": review_record.get("kind", "admitted-release"),
+                    "kind": kind,
                     "publisher": manifest.get("publisher_id", publisher),
                     "manifest_sha256": sha256_hex(manifest_bytes),
-                    "signature_state": publish.get(
+                    "signature_state": publish_block.get(
                         "signature_state",
                         "signed-valid" if (release_dir / "manifest.sig").is_file() else "unsigned",
                     ),
-                    "timestamp": publish.get("timestamp"),
-                    "timestamp_recommended": bool(publish.get("timestamp_recommended", False)),
+                    "timestamp": publish_block.get("timestamp"),
+                    "timestamp_recommended": bool(
+                        publish_block.get("timestamp_recommended", False)
+                    ),
                     "display_name": manifest.get("display_name", plugin),
                     "summary": manifest.get("summary", ""),
                     "licence_spdx": manifest.get("licence", {}).get("spdx_expression", "unknown"),
@@ -276,7 +450,7 @@ def generate(root: Path) -> bytes:
                         }
                         for entry in manifest.get("evidence", [])
                     ],
-                    "maintenance": _maintenance(publish),
+                    "maintenance": _maintenance(publish_block),
                     "advisories": sorted(
                         advisory.get("id", "")
                         for advisory in status.get("advisories", [])
@@ -295,11 +469,36 @@ def generate(root: Path) -> bytes:
                     ),
                     "transport_triples": submission.get("transport_triples", []),
                     "source_revision": manifest.get("source", {}).get("revision", "0" * 40),
-                    "gateway_ref": publish.get("gateway_ref"),
-                    "firmware_attestation": publish.get("firmware_attestation"),
+                    "gateway_ref": publish_block.get("gateway_ref"),
+                    "firmware_attestation": publish_block.get("firmware_attestation"),
                     "unverified_markers": list(_UNVERIFIED_MARKERS),
                 }
             )
+
+    # Issue #227 slice 5 (CR-57, Q20): one row per shared listing, from the
+    # share record alone. A listing never shares an identity with a release
+    # (the second entry at a key refuses, as it does between two releases),
+    # the generator never picks between two share records, and a takedown
+    # record drops the row — the record and git history retain it (CR-32).
+    for key in sorted(shares):
+        publisher, plugin, version = key
+        row_id = f"{publisher}/{plugin}/{version}"
+        if key in seen_rows:
+            problems.append(f"index_duplicate_row:{row_id}")
+            continue
+        seen_rows.add(key)
+        records = shares[key]
+        if len(records) > 1:
+            problems.append(
+                f"index_listing_ambiguous:{row_id}: {len(records)} share records — "
+                "one key holds one listing, and the generator never picks"
+            )
+            continue
+        if key in taken_down:
+            continue
+        path, lifecycle = records[0]
+        rows.append(_shared_row(key, path, lifecycle))
+
     if problems:
         for problem in problems:
             print(f"generate_index: {problem}", file=sys.stderr)

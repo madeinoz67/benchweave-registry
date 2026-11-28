@@ -50,6 +50,10 @@ SOURCE_URL = "https://github.com/harborline-example/anchor-meter"
 #: A key no fixture listing uses until an arm plants something there.
 UNLISTED: tuple[str, str, str] = ("harborline-systems", "cargo-scale", "1.0.0")
 
+#: A second listing an arm adds when it needs a sibling (it must survive
+#: another listing's takedown).
+SHARED_SIBLING: tuple[str, str, str] = ("harborline-systems", "bore-probe", "1.1.0")
+
 Key = tuple[str, str, str]
 
 
@@ -286,6 +290,26 @@ def write_review(root: Path, record: dict[str, Any]) -> Path:
     path = target / "review-1.json"
     path.write_bytes(_canon(record))
     return path
+
+
+def write_minimal_review(
+    root: Path, publisher: str, plugin: str, version: str, *, kind: str = "admitted-release"
+) -> Path:
+    """The least a release needs for a catalogue row (issue #227 slice 5): one
+    kind-carrying record. The synthetic release trees of the generator and
+    page suites carry this and nothing more — a row's kind is generated from a
+    record, never defaulted."""
+    return write_review(
+        root,
+        {
+            "actor": "madeinoz67",
+            "created_at": "2026-10-02T00:00:00Z",
+            "kind": kind,
+            "record_type": "review",
+            "record_version": "1.0.0",
+            "review": {"plugin": plugin, "publisher": publisher, "version": version},
+        },
+    )
 
 
 def plant_bare_release(root: Path, key: Key) -> Path:

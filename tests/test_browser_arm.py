@@ -80,7 +80,7 @@ def _browser_site(root: Path, private: Ed25519PrivateKey) -> None:
     # index generator's join); a minimal record is enough — the records
     # tree of a synthetic page-generation site never runs the validity gate
     review_dir = root / "records" / "submissions" / "quarrystone-labs" / "beta-probe" / "0.3.0"
-    review_dir.mkdir(parents=True)
+    review_dir.mkdir(parents=True, exist_ok=True)
     (review_dir / "review-1.json").write_text(
         json.dumps(
             {

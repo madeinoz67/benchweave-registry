@@ -16,6 +16,25 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import validate_records as vr
+from issue227_tree import (
+    ADMITTED,
+    FIXTURE,
+    REVISION,
+    SHARED,
+    SHARED_SIBLING,
+    SOURCE_URL,
+    generate,
+    plant_bare_release,
+    rows_by_key,
+    run_generator,
+    share_record,
+    takedown_record,
+    three_kind_tree,
+    with_top,
+    write_minimal_review,
+    write_record,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 GENERATOR = REPO / "scripts" / "generate_index.py"
@@ -169,6 +188,9 @@ def _fixture_release(
         bound = dict(status)
         bound["release"] = _bound_release_block(release, plugin, version)
         (release / "status.json").write_bytes(_canon(bound))
+    # Issue #227 slice 5: a release row's kind is generated from a record,
+    # never defaulted — the synthetic release carries one kind-carrying record.
+    write_minimal_review(root, "northwind-instruments", plugin, version)
     return release
 
 
@@ -640,3 +662,343 @@ def test_unlist_record_does_not_drop_sibling_rows(tmp_path: Path) -> None:
     _fixture_release(root, plugin="beta-tool")
     _unlist_record(root, plugin="alpha-tool")
     assert _row_ids(root) == ["northwind-instruments/beta-tool"]
+
+
+# ── issue #227 slice 5: community-shared rows, and a kind never defaulted ────
+#
+# Acceptance E1 (kind), E3's index half and E4 (takedown), on the gate-valid
+# three-kind tree tests/issue227_tree.py builds. The shared row's shape is
+# written by hand below (``_shared_row``): the index schema pins it and the
+# generator must emit exactly it.
+
+SHARED_MARKER = "community-shared-not-reviewed"
+ADMITTED_ID = "northwind-instruments/alpha-tool@1.0.0"
+FIXTURE_ID = "northwind-instruments/fixture-tool@0.0.1"
+SHARED_ID = "harborline-systems/anchor-meter@0.4.0"
+SIBLING_ID = "harborline-systems/bore-probe@1.1.0"
+
+_NO_CAPS = {
+    "network_egress": False,
+    "subprocess_or_native_library": False,
+    "filesystem_writes_beyond_evidence_retention": False,
+}
+
+
+def _shared_row() -> dict[str, Any]:
+    """The contract shape of a community-shared row: CR-57's carried set,
+    unsigned, no release-class claim, the unverified marker structural."""
+    return {
+        "registry_id": "benchweave-registry",
+        "package_id": "harborline-systems/anchor-meter",
+        "version": "0.4.0",
+        "kind": "community-shared",
+        "publisher": "harborline-systems",
+        "manifest_sha256": "d" * 64,
+        "signature_state": "unsigned",
+        "timestamp": None,
+        "timestamp_recommended": False,
+        "display_name": "Anchor meter",
+        "summary": "Author-declared summary for the community-shared fixture listing.",
+        "licence_spdx": "BSD-3-Clause",
+        "compatibility": {
+            "otdp_versions": ["0.2.2"],
+            "adapter_api_versions": ["1.2"],
+            "stg_versions": ["1.4"],
+        },
+        "evidence": [],
+        "maintenance": "unknown",
+        "advisories": [],
+        "capabilities": dict(_NO_CAPS),
+        "transport_triples": [],
+        "source_revision": REVISION,
+        "source_url": SOURCE_URL,
+        "gateway_ref": None,
+        "firmware_attestation": None,
+        "unverified_markers": [SHARED_MARKER],
+    }
+
+
+def _index_errors(row: dict[str, Any]) -> list[str]:
+    import jsonschema
+
+    schema = json.loads((REPO / "records" / "index.schema.json").read_bytes())
+    document = {
+        "index_version": 1,
+        "generated_from": {"records_tree": "records/", "releases_tree": "releases/"},
+        "rows": [row],
+    }
+    return [
+        f"{error.json_path}: {error.message}"
+        for error in jsonschema.Draft202012Validator(schema).iter_errors(document)
+    ]
+
+
+def _release_bytes(rows: list[dict[str, Any]]) -> list[bytes]:
+    """Every non-shared row, as canonical bytes (the E4 comparison unit)."""
+    return [vr.canonical_bytes(row) for row in rows if row.get("kind") != "community-shared"]
+
+
+# --- the index schema's shared-row contract -----------------------------------
+
+
+def test_the_index_schema_admits_the_shared_row_contract() -> None:
+    assert _index_errors(_shared_row()) == []
+
+
+@pytest.mark.parametrize(
+    ("members", "named"),
+    [
+        ({"signature_state": "signed-valid"}, "signature_state"),
+        ({"unverified_markers": []}, "unverified_markers"),
+        (
+            {
+                "evidence": [
+                    {"level": "hardware", "report_path": "evidence/x.md", "result": "passed"}
+                ]
+            },
+            "evidence",
+        ),
+        ({"maintenance": "maintained"}, "maintenance"),
+        ({"advisories": ["BW-ADV-001"]}, "advisories"),
+        (
+            {"transport_triples": [{"id": "t", "version": "1", "sha256": "e" * 64}]},
+            "transport_triples",
+        ),
+        ({"gateway_ref": "a" * 40}, "gateway_ref"),
+        ({"firmware_attestation": {"vendor": "v", "manifest": "m"}}, "firmware_attestation"),
+        (
+            {
+                "timestamp": {
+                    "tsa": "t",
+                    "signed_at": "2026-01-01T00:00:00Z",
+                    "signature_sha256": "a" * 64,
+                    "token_sha256": "b" * 64,
+                }
+            },
+            "timestamp",
+        ),
+        ({"timestamp_recommended": True}, "timestamp_recommended"),
+    ],
+)
+def test_the_index_schema_refuses_a_release_claim_on_a_shared_row(
+    members: dict[str, Any], named: str
+) -> None:
+    """A shared row carries no release-class claim. DISCRIMINATING AT BASE:
+    every plant (minus ``source_url``, which the base schema does not know)
+    was ACCEPTED by the base index schema."""
+    row = {**_shared_row(), **members}
+    del row["source_url"]
+    errors = _index_errors(row)
+    assert any(named in error for error in errors), errors
+
+
+def test_the_index_schema_requires_the_pinned_source_on_a_shared_row() -> None:
+    """``source_url`` is the additive field a shared row needs and a release
+    row does not carry: without it the consumer cannot reach the pinned
+    source in one step. DISCRIMINATING AT BASE (the base schema admits it)."""
+    row = _shared_row()
+    del row["source_url"]
+    assert any("source_url" in error for error in _index_errors(row))
+
+
+@pytest.mark.parametrize(
+    "url", ["http://github.com/harborline-example/anchor-meter", "javascript:alert(1)"]
+)
+def test_the_index_schema_takes_only_an_https_source_url(url: str) -> None:
+    row = {**_shared_row(), "source_url": url}
+    assert any("source_url" in error for error in _index_errors(row))
+
+
+def test_a_release_row_is_untouched_by_the_shared_row_contract() -> None:
+    """Additive only: the committed release row validates and carries no
+    ``source_url`` — zero format motion for the rows that existed (PIN)."""
+    committed = json.loads((REPO / "index.json").read_bytes())
+    assert [row["kind"] for row in committed["rows"]] == ["admitted-release"]
+    for row in committed["rows"]:
+        assert "source_url" not in row
+        assert _index_errors(row) == []
+
+
+# --- the generator: shared rows -----------------------------------------------
+
+
+def test_a_shared_listing_becomes_a_community_shared_row(tmp_path: Path) -> None:
+    """The generator emits exactly the contract shape; the row's digest is
+    the canonical share record's — the only bytes the registry holds."""
+    tree = three_kind_tree(tmp_path / "repo")
+    row = rows_by_key(generate(tree.root))[SHARED_ID]
+    expected = {
+        **_shared_row(),
+        "manifest_sha256": hashlib.sha256(tree.share_record_path().read_bytes()).hexdigest(),
+    }
+    assert row == expected
+
+
+def test_the_generated_index_holds_all_three_kinds(tmp_path: Path) -> None:
+    """E1's denominator on a GENERATED index: one admitted release, one
+    in-tree-fixture release and one community-shared listing."""
+    tree = three_kind_tree(tmp_path / "repo")
+    kinds = {key: row["kind"] for key, row in rows_by_key(generate(tree.root)).items()}
+    assert kinds == {
+        ADMITTED_ID: "admitted-release",
+        FIXTURE_ID: "in-tree-fixture",
+        SHARED_ID: "community-shared",
+    }
+
+
+def test_release_rows_are_byte_identical_beside_a_listing(tmp_path: Path) -> None:
+    """A listing beside two releases changes no release row (CR-13's kin)."""
+    tree = three_kind_tree(tmp_path / "repo")
+    with_listing = _release_bytes(generate(tree.root))
+    tree.share_record_path().unlink()
+    assert len(with_listing) == 2
+    assert _release_bytes(generate(tree.root)) == with_listing
+
+
+def test_a_taken_down_listing_leaves_the_index_and_the_admitted_set_is_byte_unchanged(
+    tmp_path: Path,
+) -> None:
+    """E4: the takedown drops the shared row and nothing else — every other
+    row is byte-identical before and after."""
+    tree = three_kind_tree(tmp_path / "repo")
+    before = generate(tree.root)
+    assert SHARED_ID in rows_by_key(before)
+    write_record(tree.root, takedown_record())
+    after = generate(tree.root)
+    assert SHARED_ID not in rows_by_key(after)
+    assert len(after) == len(before) - 1
+    assert _release_bytes(after) == _release_bytes(before)
+    admitted = [row for row in after if row["kind"] == "admitted-release"]
+    assert [row["package_id"] for row in admitted] == ["northwind-instruments/alpha-tool"]
+
+
+def test_a_takedown_drops_only_its_own_listing(tmp_path: Path) -> None:
+    tree = three_kind_tree(tmp_path / "repo")
+    write_record(tree.root, share_record(SHARED_SIBLING))
+    write_record(tree.root, takedown_record())
+    keys = set(rows_by_key(generate(tree.root)))
+    assert SHARED_ID not in keys
+    assert SIBLING_ID in keys
+
+
+def test_a_takedown_record_without_regeneration_refuses(tmp_path: Path) -> None:
+    """CR-21 over the takedown path: the record lands, the index is stale,
+    and ``--check`` refuses."""
+    tree = three_kind_tree(tmp_path / "repo")
+    first = _run("--root", str(tree.root))
+    assert first.returncode == 0, first.stderr
+    write_record(tree.root, takedown_record())
+    check = _run("--check", "--root", str(tree.root))
+    assert check.returncode == 1, check.stdout + check.stderr
+    assert "index_drift" in check.stderr
+
+
+def test_the_takedown_is_reconstructable_from_the_tree(tmp_path: Path) -> None:
+    """E4: from the tree alone — who shared what and when, who took it down,
+    why and when. Nothing is erased (CR-32: git history is the floor)."""
+    tree = three_kind_tree(tmp_path / "repo")
+    write_record(tree.root, takedown_record())
+    generate(tree.root)
+    listing_dir = tree.lifecycle_dir(SHARED)
+    names = sorted(p.name for p in listing_dir.iterdir())
+    assert names == ["1-share.json", "2-takedown.json"]
+    share = tree.read_record(listing_dir / "1-share.json")
+    takedown = tree.read_record(listing_dir / "2-takedown.json")
+    assert (share["actor"], share["lifecycle"]["shared"]["source"]["revision"]) == (
+        SHARED[0],
+        REVISION,
+    )
+    assert takedown["actor"] == "madeinoz67"
+    assert takedown["created_at"] == "2026-11-27T00:00:00Z"
+    assert takedown["lifecycle"]["reason"].startswith("takedown requested")
+    assert vr.validate_tree(tree.root) == []
+
+
+def test_a_listing_and_a_release_at_one_identity_refuse(tmp_path: Path) -> None:
+    """Two entries under one identity never both serve rows (M3's rule,
+    extended to the listing)."""
+    tree = three_kind_tree(tmp_path / "repo")
+    plant_bare_release(tree.root, SHARED)
+    result = run_generator(tree.root)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "index_duplicate_row:harborline-systems/anchor-meter/0.4.0" in result.stderr
+
+
+def test_two_share_records_at_one_key_refuse(tmp_path: Path) -> None:
+    """The gate refuses the duplicate; the generator never picks one."""
+    tree = three_kind_tree(tmp_path / "repo")
+    write_record(tree.root, share_record())
+    result = run_generator(tree.root)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "index_listing_ambiguous:" in result.stderr
+    assert "harborline-systems/anchor-meter/0.4.0" in result.stderr
+
+
+# --- the generator: a kind is generated from a record, never defaulted ---------
+
+
+def test_a_release_with_no_kind_record_refuses_instead_of_defaulting(
+    tmp_path: Path,
+) -> None:
+    """E1's kill direction (an untagged entry landing). The pre-slice
+    generator tagged such a row ``admitted-release`` by default, so a release
+    directory with no record at all reached the catalogue as an admitted
+    release. DISCRIMINATING AT BASE."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    release = _fixture_release(root)
+    for record in (root / "records").rglob("*.json"):
+        record.unlink()
+    result = _run("--root", str(root))
+    assert result.returncode == 1, (
+        f"a record-less release was indexed as admitted by default: {result.stdout}"
+    )
+    assert "index_kind_untagged:northwind-instruments/alpha-tool/1.0.0" in result.stderr
+    assert not (root / "index.json").exists()
+    assert release.is_dir()
+
+
+@pytest.mark.parametrize(
+    ("review_kind", "publish_kind", "prefix"),
+    [
+        ("admitted-release", "in-tree-fixture", "index_kind_conflict:"),
+        ("community-shared", "community-shared", "index_kind_shared_release:"),
+    ],
+)
+def test_the_release_records_must_agree_on_one_release_kind(
+    tmp_path: Path, review_kind: str, publish_kind: str, prefix: str
+) -> None:
+    """One release, one kind: disagreeing records refuse, and a release can
+    never be ``community-shared`` (sharing is not an admission path)."""
+    tree = three_kind_tree(tmp_path / "repo")
+    tree.share_record_path().unlink()
+    review_path = (
+        tree.root
+        / "records"
+        / "submissions"
+        / ADMITTED[0]
+        / ADMITTED[1]
+        / ADMITTED[2]
+        / "review-1.json"
+    )
+    publish_path = tree.publish_path()
+    review_path.write_bytes(
+        vr.canonical_bytes(with_top(tree.read_record(review_path), kind=review_kind))
+    )
+    publish_path.write_bytes(
+        vr.canonical_bytes(with_top(tree.read_record(publish_path), kind=publish_kind))
+    )
+    result = run_generator(tree.root)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"{prefix}northwind-instruments/alpha-tool/1.0.0" in result.stderr
+
+
+def test_the_publish_record_alone_can_carry_the_release_kind(tmp_path: Path) -> None:
+    """Control: a release whose review record is absent reads its kind from
+    the publish record — the tag comes from A record, not from a default."""
+    publish_only = tmp_path / "publish-only"
+    three_kind_tree(publish_only)
+    review = publish_only / "records" / "submissions" / FIXTURE[0] / FIXTURE[1] / FIXTURE[2]
+    review.joinpath("review-1.json").unlink()
+    kinds = {key: row["kind"] for key, row in rows_by_key(generate(publish_only)).items()}
+    assert kinds[FIXTURE_ID] == "in-tree-fixture"

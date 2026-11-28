@@ -24,6 +24,7 @@ from typing import Any
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from issue227_tree import write_minimal_review
 from test_catalogue_page import FOOTER_PARAGRAPH, assert_no_service_claim_vocabulary
 
 REPO = Path(__file__).resolve().parents[1]
@@ -555,6 +556,9 @@ def _write_release(
     (release / "payload.zip").write_bytes(payload)
     if private_key is not None:
         (release / "manifest.sig").write_bytes(private_key.sign(submission_bytes))
+    # Issue #227 slice 5: a release row's kind is generated from a record,
+    # never defaulted — the synthetic release carries one kind-carrying record.
+    write_minimal_review(root, publisher, plugin, version)
 
 
 def _synthetic_repo(tmp_path: Path) -> tuple[Path, Ed25519PrivateKey]:
