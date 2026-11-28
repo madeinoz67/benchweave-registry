@@ -17,7 +17,9 @@ Acceptance map (design record section 4, slice 5):
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,7 @@ from issue227_tree import (
     UNLISTED,
     Key,
     ThreeKindTree,
+    generate,
     lifecycle_record,
     package_id,
     plant_bare_release,
@@ -423,3 +426,135 @@ def test_the_fixture_set_carries_all_three_kinds(tmp_path: Path) -> None:
     }
     assert kinds == {"admitted-release", "in-tree-fixture", "community-shared"}
     assert vr.validate_tree(tree.root) == []
+
+
+# ── E5's docs-and-surface audit: no unqualified protection claim adjacent ───
+#
+# "a docs-and-surface audit at review finds no unqualified 'verified' or
+# 'trusted' adjacent to shared entries" (design section 4, slice 5). The audit
+# is a floor and it runs on every build: a sentence on a shared surface that
+# uses a protection word must carry its negation in the same sentence. It
+# cannot read intent — it can keep the word "verified" from drifting next to
+# a shared listing without its "not".
+
+README = REPO / "README.md"
+PAGE_GENERATOR = REPO / "scripts" / "generate_catalogue_page.py"
+
+_PROTECTION_WORDS = re.compile(
+    r"\b(verified|trusted|safe|secure|sandbox\w*|guarantee\w*)\b", re.IGNORECASE
+)
+_QUALIFIER = re.compile(r"\b(not|no|never|nothing|none|cannot)\b|unverified", re.IGNORECASE)
+
+
+def _readme_section() -> str:
+    """The Author-sharing section: from its heading to the next H2."""
+    match = re.search(
+        r"^## Author-sharing.*?$(.*?)(?=^## |\Z)",
+        README.read_text(encoding="utf-8"),
+        re.MULTILINE | re.DOTALL,
+    )
+    return match.group(1) if match else ""
+
+
+def _text(markup: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", markup))
+
+
+def _unqualified(text: str) -> list[str]:
+    """Sentences or lines that use a protection word with no negation in them."""
+    units = re.split(r"(?<=[.!?])\s+|\n", text)
+    return [
+        unit.strip()
+        for unit in units
+        if _PROTECTION_WORDS.search(unit) and not _QUALIFIER.search(unit)
+    ]
+
+
+def _page_module() -> Any:
+    spec = importlib.util.spec_from_file_location("generate_catalogue_page", PAGE_GENERATOR)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_readme_lists_every_lifecycle_op() -> None:
+    """Prose defers to the machine source: the layout row for
+    ``records/lifecycle`` names every op the records schema admits. It named
+    six of eight before this slice (withdraw was missing too)."""
+    schema = json.loads((REPO / "records" / "records.schema.json").read_bytes())
+    ops = schema["properties"]["lifecycle"]["properties"]["op"]["enum"]
+    row = next(
+        line
+        for line in README.read_text(encoding="utf-8").splitlines()
+        if line.startswith("| `records/lifecycle/")
+    )
+    missing = [op for op in ops if re.search(rf"(?i)(?<![a-z]){op}(?![a-z])", row) is None]
+    assert not missing, f"the README lifecycle row does not name: {missing}"
+
+
+def test_the_readme_documents_author_sharing() -> None:
+    """The share record, the takedown, the refusals and the rendering are
+    written where an author and a maintainer look: the README."""
+    section = _readme_section()
+    assert section, "README.md carries no Author-sharing section"
+    for needle in (
+        "1-share.json",
+        "`community-shared`",
+        "`1.2.0`",
+        "community-shared-not-reviewed",
+        "<seq>-takedown.json",
+        "does not promise a response time",
+        "`record_kind_mismatch:`",
+        "`shared_listing_conflict:`",
+        "`shared_listing_duplicate:`",
+        "`record_subject_absent:`",
+        "`index_kind_untagged:`",
+        "https://github.com/madeinoz67/benchweave/issues",
+    ):
+        assert needle in section, f"the Author-sharing section does not carry {needle!r}"
+    assert "\u2014" not in section, "the new section uses an em dash (ASD-STE100)"
+
+
+def test_no_unqualified_protection_claim_adjacent_to_shared_entries(
+    tmp_path: Path,
+) -> None:
+    """E5's audit, on every shared surface: the README section, a rendered
+    shared record page, both templates and a rendered catalogue page."""
+    module = _page_module()
+    tree = _tree(tmp_path, site_sources=True)
+    rows = {f"{row['package_id']}@{row['version']}": row for row in generate(tree.root)}
+    publishers = module._load_publishers(tree.root)
+    record_template = (REPO / "catalogue" / "record.template.html").read_text(encoding="utf-8")
+    shared_page = str(
+        module.render_record_page(
+            rows["harborline-systems/anchor-meter@0.4.0"],
+            publishers["harborline-systems"],
+            [],
+            "0" * 39 + "1",
+            record_template,
+        )
+    )
+    index_bytes = (tree.root / "index.json").read_bytes()
+    catalogue_template = (REPO / "catalogue" / "index.template.html").read_text(encoding="utf-8")
+    surfaces = {
+        "README (Author-sharing section)": _readme_section(),
+        "the shared record page": _text(shared_page),
+        "catalogue/index.template.html": _text(catalogue_template),
+        "catalogue/record.template.html": _text(record_template),
+        "the catalogue page over a three-kind index": _text(
+            str(module.render_page(index_bytes, catalogue_template, "0" * 39 + "1"))
+        ),
+    }
+    assert surfaces["README (Author-sharing section)"], "the README section is missing"
+    unqualified = {name: _unqualified(text) for name, text in surfaces.items()}
+    offenders = {name: found for name, found in unqualified.items() if found}
+    assert not offenders, (
+        "a protection word rides a shared surface without its negation: "
+        f"{json.dumps(offenders, indent=2)}"
+    )
+    # the audit is not vacuous: it flags a bare claim planted on the page
+    assert _unqualified("This listing is verified and safe.") == [
+        "This listing is verified and safe."
+    ]
+    assert _unqualified("The registry did not review it. No sandbox isolates it.") == []
