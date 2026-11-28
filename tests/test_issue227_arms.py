@@ -721,6 +721,19 @@ def test_a_dev_prefixed_registry_id_on_a_record_is_refused(tmp_path: Path, plant
     )
 
 
+def test_a_registry_id_that_merely_contains_dev_is_not_dev_lineage(tmp_path: Path) -> None:
+    """The arm matches the PREFIX on the registry-id field itself: a registry
+    id that contains "dev-" without starting with it is not dev lineage. The
+    blunt substring refused this too, so this arm was RED before the change."""
+    tree = _tree(tmp_path)
+    path = tree.share_record_path()
+    record = tree.read_record(path)
+    record["registry_id"] = "madeinoz67-dev-tools"
+    _rewrite(path, record)
+    findings = vr.validate_tree(tree.root)
+    assert not any(finding.startswith("dev_lineage_in_records:") for finding in findings), findings
+
+
 @pytest.mark.parametrize("plant", ["own", "dependency"])
 def test_a_normal_registry_id_on_a_record_is_not_dev_lineage(tmp_path: Path, plant: str) -> None:
     """The arm matches the PREFIX, not the member's presence (PIN): a record

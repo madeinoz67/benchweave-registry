@@ -11,8 +11,10 @@ separators, one trailing newline), schema-valid against
   consumer of the join silently kept the last entry (fold F6);
 - a publish record without a closure diff, or whose sign-off names a different
   closure digest than the one published, is refused (CR-38);
-- no dev-prefixed registry id appears anywhere in the records or the published
-  releases (CR-35's index half);
+- no dev-prefixed registry id reaches a record or a published release
+  (CR-35's index half): the dev- prefix is matched against registry-id fields
+  only (a document's own ``registry_id`` and each dependency's), never
+  against a URL, a display name or free text (``dev_lineage_in_records:``);
 - a yank record whose release carries no ``status.json`` with lifecycle
   yanked-or-revoked is refused (``yank_status_absent:``; fold R2 renamed by
   issue #225 slice 3 to the design's prefix family): ``status.json`` is
@@ -349,6 +351,26 @@ def _record_key(parsed: dict[str, Any]) -> RecordKey | None:
     if not isinstance(block, dict):
         return None
     return (block.get("publisher"), block.get("plugin"), block.get("version"))
+
+
+def _dev_lineage_ids(record: dict[str, Any]) -> list[str]:
+    """The dev-prefixed registry ids a record carries: its own ``registry_id``
+    and each dependency's (``dependencies[].registry_id``), the reads the
+    releases half makes on a manifest. A member of another type is not a
+    registry id; the schema refuses it on its own account."""
+    found: list[str] = []
+    own = record.get("registry_id")
+    if isinstance(own, str) and own.startswith("dev-"):
+        found.append(own)
+    dependencies = record.get("dependencies")
+    if isinstance(dependencies, list):
+        for dependency in dependencies:
+            if not isinstance(dependency, dict):
+                continue
+            registry_id = dependency.get("registry_id")
+            if isinstance(registry_id, str) and registry_id.startswith("dev-"):
+                found.append(registry_id)
+    return found
 
 
 def _share_findings(
@@ -717,8 +739,17 @@ def validate_tree(root: Path) -> list[str]:
                 advisory_ids.setdefault(collect_key, set()).add(str(advisory["id"]))
 
     for path, parsed in parsed_by_path.items():
-        # CR-35's index half: no dev-prefixed registry id in any record.
-        if "dev-" in json.dumps(parsed):
+        # CR-35's records half: no dev-prefixed registry id reaches a record.
+        # The dev- PREFIX is matched against the record's registry-id fields,
+        # the same two reads the releases half makes above (the document's
+        # own registry_id and each dependency's). The records schema admits
+        # no registry-id member — every object is closed, and the SDK's
+        # closure-diff writer emits package ids — so a valid record carries
+        # none and the arm fires only on a record that does. It is NOT a
+        # substring over the whole record (issue #227 fold wave 1): a source
+        # URL, a display name or free text that merely contains "dev-" is not
+        # lineage and does not refuse.
+        if _dev_lineage_ids(parsed):
             findings.append(f"dev_lineage_in_records:{path.name}")
         # CR-15's records half (issue #225): every record's publisher is a
         # vetted publishers.json entry.
