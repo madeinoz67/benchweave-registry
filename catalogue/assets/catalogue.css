@@ -198,6 +198,14 @@ main {
 /* catalogue meta line (styleguide v0.2 component) */
 .catalogue-meta { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); margin: 8px 0; }
 p.note { color: var(--text-muted); font-size: 14px; max-width: 62ch; }
+/* The community-shared listing's notice (issue #227 slice 5): the warning
+   tone, so it reads before any author-declared content. */
+.shared-notice {
+  border: 1px solid color-mix(in srgb, var(--amber-solid) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--amber-solid) 18%, transparent);
+  color: var(--text); padding: 12px 16px; max-width: 62ch;
+}
 
 /* ── the records table ────────────────────────────────────────────────── */
 

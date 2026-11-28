@@ -22,9 +22,20 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import validate_records as vr
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from issue227_tree import write_minimal_review
+from issue227_tree import (
+    ADMITTED,
+    SHARED,
+    generate,
+    rows_by_key,
+    three_kind_tree,
+    write_minimal_review,
+)
+from issue227_tree import (
+    FIXTURE as FIXTURE_RELEASE,
+)
 from test_catalogue_page import FOOTER_PARAGRAPH, assert_no_service_claim_vocabulary
 
 REPO = Path(__file__).resolve().parents[1]
@@ -206,8 +217,9 @@ def test_explicit_none_everywhere_on_an_empty_row() -> None:
 
 def test_the_marker_explanation_map_is_single_carrier() -> None:
     """§5: MARKER_EXPLANATION lives in ONE carrier (record pages are static;
-    no JS clones them) — seeded with the mockup's two sentences, and an
-    unknown marker id renders its id with no explanation line."""
+    no JS clones them) — seeded with the mockup's two sentences and extended
+    by issue #227 slice 5 with the shared marker's, and an unknown marker id
+    renders its id with no explanation line."""
     module = _module()
     assert module.MARKER_EXPLANATION == {
         "conformance-evidence-self-attested": (
@@ -215,6 +227,10 @@ def test_the_marker_explanation_map_is_single_carrier() -> None:
         ),
         "review-is-process-not-proof": (
             "Review followed the registry process; it does not prove behaviour."
+        ),
+        "community-shared-not-reviewed": (
+            "The author shared this entry. The registry did not review it and did "
+            "not check anything in it."
         ),
     }
     plugins_js = (REPO / "catalogue" / "assets" / "plugins.js").read_text(encoding="utf-8")
@@ -801,13 +817,10 @@ def test_e2e_the_committed_tree_generates_its_own_record_page(tmp_path: Path) ->
     page plus the committed release's record page, with its signature
     verified at generation time and its downloads bound to the real files."""
     dest = tmp_path / "site"
-    result = _run(
-        [sys.executable, str(GENERATOR), "--dest", str(dest), "--sha", SHA]
-    )
+    result = _run([sys.executable, str(GENERATOR), "--dest", str(dest), "--sha", SHA])
     assert result.returncode == 0, result.stderr
     page_path = (
-        dest / "records" / "benchweave-registry" / "madeinoz67" / "dps150"
-        / "0.1.0" / "index.html"
+        dest / "records" / "benchweave-registry" / "madeinoz67" / "dps150" / "0.1.0" / "index.html"
     )
     assert page_path.is_file(), "the dogfood release's record page"
     page = page_path.read_text(encoding="utf-8")
@@ -821,3 +834,224 @@ def test_e2e_the_committed_tree_generates_its_own_record_page(tmp_path: Path) ->
     recomputed = hashlib.sha256((release / "manifest.json").read_bytes()).hexdigest()
     assert recomputed in page, "the dogfood manifest digest display drifted"
     assert (dest / "assets" / "htmx.min.js").is_file()
+
+
+# ── issue #227 slice 5: the shared-listing record page (E2, E5) ──────────────
+#
+# A community-shared row gets its own record page: kind badge, the unverified
+# marker, the publisher identity and the pinned source — and no release-class
+# claim. The same fragment serves the standalone page (no JS) and the htmx
+# drill-down (it is what #release-detail carries), so one render test covers
+# both views.
+
+SHARED_MARKER = "community-shared-not-reviewed"
+SHARED_TITLE = "<title>Community-shared listing, BenchWeave Registry</title>"
+
+#: Claims a release page makes and a shared-listing page must never make.
+ADMITTED_CLASS_CLAIMS = (
+    "Valid against the recorded ed25519 key",
+    "Signed by",
+    "Admitted release",
+    "Open release files",
+    "Release files",
+    "Publication is not authorization. Admit this release",
+    "Manifest SHA-256",
+)
+
+HARBORLINE_ENTRY: dict[str, Any] = {
+    "publisher_id": "harborline-systems",
+    "github": "harborline-example",
+    "namespace": "harborline-systems",
+    "vetted_at": "2026-10-02T00:00:00Z",
+    "key_validity": {
+        "not_before": "2026-01-01T00:00:00Z",
+        "not_after": "2030-01-01T00:00:00Z",
+    },
+    "publisher_repo_protections": [
+        {"protection": "push-protection", "state": "declared-not-verified"},
+    ],
+}
+
+
+def _shared_page(row: dict[str, Any] | None = None, module: Any = None, **kwargs: Any) -> str:
+    row = dict(row if row is not None else _row("harborline-systems/harborline-pwm"))
+    return str(
+        (module or _module()).render_record_page(
+            row, HARBORLINE_ENTRY, [], SHA, _template(), **kwargs
+        )
+    )
+
+
+def _assert_shared_page(page: str, row: dict[str, Any]) -> None:
+    """The shared-row render test (E2, E5). Two callers: the positive arm and
+    the reversion arm that removes the marker string."""
+    assert "Community shared" in page, "the kind badge is missing"
+    assert SHARED_MARKER in page, "the unverified marker is missing"
+    assert "The author shared this entry." in page, "the shared notice is missing"
+    assert row["publisher"] in page, "the publisher identity is missing"
+    assert row["source_revision"] in page, "the pinned source revision is missing"
+    assert f"{row['source_url']}/tree/{row['source_revision']}" in page, (
+        "the pinned source is not one step away"
+    )
+    for claim in ADMITTED_CLASS_CLAIMS:
+        assert claim not in page, f"a shared listing renders a release claim: {claim!r}"
+
+
+def test_a_shared_row_renders_kind_marker_publisher_and_pinned_source() -> None:
+    """E2: one step from the catalogue — the shared page shows the kind, the
+    unverified marker with its explanation, the publisher identity and the
+    pinned source (full revision, a link to it), under a title that does not
+    call the entry a release."""
+    row = _row("harborline-systems/harborline-pwm")
+    page = _shared_page(row)
+    _assert_shared_page(page, row)
+    assert SHARED_TITLE in page
+    assert (
+        "The author shared this entry. The registry did not review it and did "
+        "not check anything in it." in page
+    ), "the marker explanation is missing"
+    assert (
+        "The author shared this entry. The registry did not review it and did "
+        "not admit it. The registry did not check anything on this page." in page
+    ), "the shared notice"
+    assert "It covers the publisher identity only." in page
+    assert f'data-bw-marker="{SHARED_MARKER}"' in page and ">Unverified<" in page
+    assert f'href="{row["source_url"]}"' in page, "the repository link"
+    assert ">BSD-3-Clause<" in page, "the declared licence"
+    # pwm declares OTDP 0.2.1, adapter API 1.1 and STG 1.5 (the fixture row)
+    assert ">0.2.1<" in page and ">1.1<" in page and ">1.5<" in page, "compatibility"
+    assert "vetted 2026-10-02" in page, "the publisher's vetting date"
+
+
+def test_the_marker_is_structural_on_the_shared_record_page() -> None:
+    """E5: the marker renders from the row's KIND. A shared row whose own
+    marker list is empty, or carries a foreign id, still renders it."""
+    row = _row("harborline-systems/harborline-pwm")
+    for planted in ([], ["future-marker-unmapped"], ["review-is-process-not-proof"]):
+        page = _shared_page({**row, "unverified_markers": planted})
+        _assert_shared_page(page, row)
+        if "future-marker-unmapped" in planted:
+            assert "future-marker-unmapped" in page, "a foreign marker still renders"
+
+
+def test_e5_removing_the_marker_string_fails_the_render(tmp_path: Path) -> None:
+    """The pre-committed kill (RED-sanity by mechanism reversion): with the
+    marker string removed from the generator, the shared-row render test
+    fails. The unmutated generator must pass it first — a reversion arm whose
+    positive arm is already red proves nothing."""
+    # The row's OWN marker list is emptied, so the generator is the marker's
+    # only source: with the string removed, nothing else can supply it.
+    row = _row("harborline-systems/harborline-pwm")
+    stripped = {**row, "unverified_markers": []}
+    _assert_shared_page(_shared_page(stripped), row)
+    source = GENERATOR.read_text(encoding="utf-8")
+    mutated = source.replace(SHARED_MARKER, "community-shared-marker-removed")
+    assert mutated != source and SHARED_MARKER not in mutated, "the plant did not apply"
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
+    copy = sandbox / "generate_catalogue_page.py"
+    copy.write_text(mutated, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("generate_catalogue_page_mutated", copy)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with pytest.raises(AssertionError, match="unverified marker is missing"):
+        _assert_shared_page(_shared_page(stripped, module=module), row)
+
+
+def test_the_shared_page_keeps_the_honesty_arms_of_every_page() -> None:
+    """The whole-page honesty discipline holds on the new page kind too: the
+    footer negation paragraph pinned exact, no service-claim vocabulary
+    outside it, no mark shapes unfired, the three bars fired."""
+    for posture in (False, True):
+        page = _shared_page(registry_mark=posture)
+        assert page.count(FOOTER_PARAGRAPH) == 1
+        assert_no_service_claim_vocabulary(page, f"the shared page (registry_mark={posture})")
+        assert "<circle" not in page
+        assert page.count("<rect") == (3 if posture else 0)
+    plain = _shared_page()
+    assert "bw:record begin" not in plain and "bw:provenance -->" not in plain
+    assert f">{SHA[:12]}</span> · index v1" in plain
+    # the footer negation is the phrase's only occurrence
+    assert plain.lower().count("registry service") == 1
+
+
+@pytest.mark.parametrize("url", ["http://example.invalid/anchor-meter", "javascript:alert(1)"])
+def test_a_shared_row_with_a_non_https_source_refuses(url: str) -> None:
+    """The pinned-source link is the one external link this slice builds from
+    row data: a non-https source_url never reaches a page (the index schema
+    refuses it upstream; the page generator refuses it again, typed)."""
+    row = {**_row("harborline-systems/harborline-pwm"), "source_url": url}
+    with pytest.raises(SystemExit, match=r"page_input_invalid: .*https source_url"):
+        _shared_page(row)
+
+
+def test_an_admitted_row_still_renders_the_release_page() -> None:
+    """Scope guard: the release fragment is untouched for release rows — the
+    kind dispatch is by kind only."""
+    row = _row("northwind-instruments/northwind-psu")
+    page = str(_module().render_record_page(row, PUBLISHER_ENTRY, FILES, SHA, _template()))
+    assert "Admitted release" in page and "Open release files" in page
+    assert SHARED_MARKER not in page and SHARED_TITLE not in page
+
+
+def test_e2e_the_three_kind_tree_deploys_a_page_for_every_row(tmp_path: Path) -> None:
+    """E2 end to end: the deploy writes a record page per index row — the
+    shared listing's among them (the pre-slice deploy refused the whole site
+    on a shared row: no release directory to list) — and the catalogue page's
+    static rows are exactly the admitted signed release."""
+    root = tmp_path / "repo"
+    three_kind_tree(root, site_sources=True)
+    generate(root)
+    dest = tmp_path / "site"
+    result = _run(
+        [sys.executable, str(GENERATOR), "--root", str(root), "--dest", str(dest), "--sha", SHA]
+    )
+    assert result.returncode == 0, result.stderr
+    page = (
+        (dest / "records" / "benchweave-registry" / SHARED[0] / SHARED[1] / SHARED[2])
+        .joinpath("index.html")
+        .read_text(encoding="utf-8")
+    )
+    rows = rows_by_key(generate(root))
+    _assert_shared_page(page, rows[f"{SHARED[0]}/{SHARED[1]}@{SHARED[2]}"])
+    admitted = _deployed_page(dest, ADMITTED)
+    assert "Valid against the recorded ed25519 key" in admitted, "the signed row still verifies"
+    assert "Open release files" in admitted, "the admitted row keeps its release page"
+    assert "In-tree fixture" in _deployed_page(dest, FIXTURE_RELEASE)
+    catalogue = (dest / "index.html").read_text(encoding="utf-8")
+    assert f'data-bw-package-id="{ADMITTED[0]}/{ADMITTED[1]}"' in catalogue
+    assert f'data-bw-package-id="{SHARED[0]}/{SHARED[1]}"' not in catalogue, (
+        "a shared listing reached the static default view"
+    )
+
+
+def test_e2e_a_signed_shared_row_refuses_and_nothing_deploys(tmp_path: Path) -> None:
+    """A community-shared row can never be signed. The generator never emits
+    one (the index schema refuses it); if one reaches the page generator the
+    deploy refuses with a typed finding before it writes anything."""
+    root = tmp_path / "repo"
+    three_kind_tree(root, site_sources=True)
+    generate(root)
+    index_path = root / "index.json"
+    document = json.loads(index_path.read_bytes())
+    for row in document["rows"]:
+        if row["kind"] == "community-shared":
+            row["signature_state"] = "signed-valid"
+    index_path.write_bytes(vr.canonical_bytes(document))
+    dest = tmp_path / "site"
+    result = _run(
+        [sys.executable, str(GENERATOR), "--root", str(root), "--dest", str(dest), "--sha", SHA]
+    )
+    assert result.returncode != 0, "a signed community-shared row deployed"
+    assert "page_input_invalid:" in result.stderr and "signed-valid" in result.stderr
+    assert f"{SHARED[0]}/{SHARED[1]}/{SHARED[2]}" in result.stderr, "the refusal names the row"
+    assert "Traceback" not in result.stderr
+    assert not dest.exists() or not any(dest.iterdir()), "something deployed on refusal"
+
+
+def _deployed_page(dest: Path, key: tuple[str, str, str]) -> str:
+    """One deployed record page's text, read back from the site tree."""
+    page = dest.joinpath("records", "benchweave-registry", *key, "index.html")
+    assert page.is_file(), f"no record page deployed for {key}"
+    return page.read_text(encoding="utf-8")
