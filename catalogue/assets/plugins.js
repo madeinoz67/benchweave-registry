@@ -80,6 +80,27 @@ var TRUNCATE_AT = 12;
 
 var DEFAULT_QUERY = { kind: 'admitted-release', signature_state: 'signed-valid' };
 
+/* The table caption's fixed tail — a TWIN of the generator's CAPTION_TAIL. */
+var CAPTION_TAIL = 'Select a name for its provenance, evidence and files.';
+
+/* The table caption (issue #227 slice 5). The noun follows what is in view:
+   a community-shared listing is not a release, so a view that holds one
+   counts entries. A view of admitted releases only keeps counting releases,
+   which keeps the default view's caption byte-identical to the static one
+   the generator stamps (a twin of its _caption_html). */
+function captionText(matches, query) {
+  var rows = matches || [];
+  query = query || {};
+  var onlyReleases = rows.length
+    ? rows.every(function (row) { return row.kind === 'admitted-release'; })
+    : isNoFilter(query.kind) || query.kind === 'admitted-release';
+  var noun = onlyReleases ? 'release' : 'entry';
+  var plural = onlyReleases ? 'releases' : 'entries';
+  return (
+    rows.length + (rows.length === 1 ? ' ' + noun + '. ' : ' ' + plural + '. ') + CAPTION_TAIL
+  );
+}
+
 /* Lucide icon bodies for cloned rows — TWINS of the generator's ICONS
    (every body is circle/rect-free; §2.8's icon-rewrite pick). */
 var ICONS = {
@@ -245,6 +266,7 @@ if (typeof module !== 'undefined' && module.exports) {
     rowKey: rowKey,
     detailId: detailId,
     recordUrl: recordUrl,
+    captionText: captionText,
     DEFAULT_QUERY: DEFAULT_QUERY,
     MARKER_DISPLAY: MARKER_DISPLAY,
     KIND_DISPLAY: KIND_DISPLAY,
@@ -550,11 +572,7 @@ if (typeof module !== 'undefined' && module.exports) {
         pair.detail.setAttribute('hidden', '');
       }
     });
-    if (captionEl) {
-      captionEl.textContent =
-        matches.length + (matches.length === 1 ? ' release. ' : ' releases. ') +
-        'Select a name for its provenance, evidence and files.';
-    }
+    if (captionEl) captionEl.textContent = captionText(matches, query);
     if (shownEl) shownEl.textContent = String(matches.length);
     if (emptyEl) {
       if (matches.length) emptyEl.setAttribute('hidden', '');
