@@ -24,6 +24,7 @@ from issue227_tree import (
     SHARED,
     SHARED_SIBLING,
     SOURCE_URL,
+    ThreeKindTree,
     generate,
     plant_bare_release,
     rows_by_key,
@@ -31,6 +32,7 @@ from issue227_tree import (
     share_record,
     takedown_record,
     three_kind_tree,
+    with_lifecycle,
     with_top,
     write_minimal_review,
     write_record,
@@ -614,9 +616,7 @@ def test_yank_record_alone_keeps_the_row(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     root.mkdir()
     _fixture_release(root)
-    record_dir = (
-        root / "records" / "lifecycle" / "northwind-instruments" / "alpha-tool" / "1.0.0"
-    )
+    record_dir = root / "records" / "lifecycle" / "northwind-instruments" / "alpha-tool" / "1.0.0"
     record_dir.mkdir(parents=True)
     record_dir.joinpath("1-yank.json").write_bytes(
         _canon(
@@ -1002,3 +1002,69 @@ def test_the_publish_record_alone_can_carry_the_release_kind(tmp_path: Path) -> 
     review.joinpath("review-1.json").unlink()
     kinds = {key: row["kind"] for key, row in rows_by_key(generate(publish_only)).items()}
     assert kinds[FIXTURE_ID] == "in-tree-fixture"
+
+
+# ── PR #46 fold wave 1, finding 1: the generator mirrors the reverse arm ─────
+#
+# The validity gate is the contract (release_without_publish_record:). The
+# generator's mirror is defence in depth: it never serves a release that no
+# publish record pins, so a reviewed but unpublished release cannot reach the
+# catalogue even where the gate did not run first.
+
+
+def _unpublish(tree: ThreeKindTree, key: tuple[str, str, str]) -> None:
+    tree.publish_path(key).unlink()
+
+
+def test_a_reviewed_but_unpublished_release_refuses_at_index_generation(
+    tmp_path: Path,
+) -> None:
+    """Finding 1 (HIGH), generator half. The release keeps its review record
+    (one kind, so the kind rule passed) and loses its publish record. RED on
+    971a5b5: the generator emitted an admitted-release row."""
+    tree = three_kind_tree(tmp_path / "repo")
+    tree.share_record_path().unlink()
+    review = tree.root / "records" / "submissions" / ADMITTED[0] / ADMITTED[1] / ADMITTED[2]
+    assert review.joinpath("review-1.json").is_file(), "precondition: the review record exists"
+    _unpublish(tree, ADMITTED)
+    result = run_generator(tree.root)
+    assert result.returncode == 1, f"an unpublished release was indexed: {result.stdout}"
+    assert (
+        f"index_release_unpublished:{ADMITTED[0]}/{ADMITTED[1]}/{ADMITTED[2]}" in result.stderr
+    ), result.stderr
+    assert "release_without_publish_record:" in result.stderr, (
+        "the refusal must name the gate finding that owns the rule"
+    )
+    assert not (tree.root / "index.json").exists(), "a refused run must write no index"
+
+
+def test_a_publish_record_that_pins_other_bytes_carries_no_release(tmp_path: Path) -> None:
+    """The mirror reads the PIN, not the record's existence (RED on 971a5b5:
+    the row was emitted)."""
+    tree = three_kind_tree(tmp_path / "repo")
+    tree.share_record_path().unlink()
+    path = tree.publish_path()
+    path.write_bytes(
+        vr.canonical_bytes(with_lifecycle(tree.read_record(path), release_manifest_sha256="e" * 64))
+    )
+    result = run_generator(tree.root)
+    assert result.returncode == 1, f"a release no publish record pins was indexed: {result.stdout}"
+    assert (
+        f"index_release_unpublished:{ADMITTED[0]}/{ADMITTED[1]}/{ADMITTED[2]}" in result.stderr
+    ), result.stderr
+
+
+def test_a_release_with_neither_record_still_refuses_as_untagged(tmp_path: Path) -> None:
+    """The zero-record refusal is not regressed (PIN): the untagged finding
+    still comes first."""
+    tree = three_kind_tree(tmp_path / "repo")
+    tree.share_record_path().unlink()
+    _unpublish(tree, ADMITTED)
+    tree.root.joinpath(
+        "records", "submissions", ADMITTED[0], ADMITTED[1], ADMITTED[2], "review-1.json"
+    ).unlink()
+    result = run_generator(tree.root)
+    assert result.returncode == 1
+    assert f"index_kind_untagged:{ADMITTED[0]}/{ADMITTED[1]}/{ADMITTED[2]}" in result.stderr, (
+        result.stderr
+    )

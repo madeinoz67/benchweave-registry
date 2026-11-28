@@ -38,6 +38,7 @@ from issue227_tree import (
     package_id,
     plant_bare_release,
     review_record,
+    run_generator,
     share_record,
     takedown_record,
     three_kind_tree,
@@ -558,3 +559,82 @@ def test_no_unqualified_protection_claim_adjacent_to_shared_entries(
         "This listing is verified and safe."
     ]
     assert _unqualified("The registry did not review it. No sandbox isolates it.") == []
+
+
+# ── PR #46 fold wave 1, finding 1: the publish pairing closes both ways ──────
+#
+# The publish arm reads one way: every publish record must have a manifest
+# under releases/ whose bytes it pins. A manifest with NO publish record (a
+# release reviewed but never published) was invisible to it, and the index
+# generator served that release as admitted. The reverse arm reads from the
+# release's side. The validator is the contract; the generator's mirror is
+# defence in depth (tests/test_generate_index.py).
+
+RELEASES: tuple[Key, ...] = (ADMITTED, FIXTURE)
+
+
+def _review_path(tree: ThreeKindTree, key: Key) -> Path:
+    return tree.root / "records" / "submissions" / key[0] / key[1] / key[2] / "review-1.json"
+
+
+def _reverse_finding(findings: list[str], key: Key) -> list[str]:
+    label = "/".join(key)
+    return [
+        finding
+        for finding in findings
+        if finding.startswith("release_without_publish_record:") and label in finding
+    ]
+
+
+def test_a_release_with_review_and_publish_records_still_validates_clean(tmp_path: Path) -> None:
+    """Control (PIN): both releases carry a review record and a publish record
+    that pins the manifest, and the tree validates with no findings."""
+    tree = _tree(tmp_path)
+    assert vr.validate_tree(tree.root) == []
+
+
+@pytest.mark.parametrize("key", RELEASES)
+def test_a_reviewed_but_unpublished_release_refuses(tmp_path: Path, key: Key) -> None:
+    """Finding 1 (HIGH). The release keeps its review record and loses its
+    publish record: the gate must refuse, naming the release. RED on 971a5b5:
+    the tree validated with no findings, so the catalogue could serve a
+    release that was never published."""
+    tree = _tree(tmp_path)
+    assert _review_path(tree, key).is_file(), "precondition: the review record exists"
+    tree.publish_path(key).unlink()
+    findings = vr.validate_tree(tree.root)
+    assert _reverse_finding(findings, key), (
+        f"a reviewed but unpublished release validated: {findings or 'no findings'}"
+    )
+
+
+@pytest.mark.parametrize("key", RELEASES)
+def test_a_release_with_neither_record_still_refuses(tmp_path: Path, key: Key) -> None:
+    """The zero-record case stays refused. The generator's own refusal (the
+    existing path, not regressed) is joined by the gate's reverse arm, which
+    is RED on 971a5b5: the gate had no finding for it."""
+    tree = _tree(tmp_path)
+    tree.publish_path(key).unlink()
+    _review_path(tree, key).unlink()
+    findings = vr.validate_tree(tree.root)
+    assert _reverse_finding(findings, key), findings or "no findings"
+    result = run_generator(tree.root)
+    assert result.returncode == 1, f"a release with no record was indexed: {result.stdout}"
+    assert "index_kind_untagged:" in result.stderr, result.stderr
+    assert not (tree.root / "index.json").exists()
+
+
+@pytest.mark.parametrize("key", RELEASES)
+def test_a_publish_record_that_pins_other_bytes_governs_no_release(
+    tmp_path: Path, key: Key
+) -> None:
+    """The reverse arm reads the PIN, not the record's existence: a publish
+    record whose digest names other bytes governs nothing. The forward arm
+    reports the mismatch (PIN); the reverse arm reports the ungoverned release
+    (RED on 971a5b5)."""
+    tree = _tree(tmp_path)
+    path = tree.publish_path(key)
+    _rewrite(path, with_lifecycle(tree.read_record(path), release_manifest_sha256="e" * 64))
+    findings = vr.validate_tree(tree.root)
+    assert any(finding.startswith("release_digest_mismatch:") for finding in findings), findings
+    assert _reverse_finding(findings, key), findings
