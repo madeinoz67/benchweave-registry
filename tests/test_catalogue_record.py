@@ -31,7 +31,7 @@ from issue227_tree import (
     generate,
     rows_by_key,
     three_kind_tree,
-    write_minimal_review,
+    write_minimal_publish,
 )
 from issue227_tree import (
     FIXTURE as FIXTURE_RELEASE,
@@ -575,9 +575,10 @@ def _write_release(
     (release / "payload.zip").write_bytes(payload)
     if private_key is not None:
         (release / "manifest.sig").write_bytes(private_key.sign(submission_bytes))
-    # Issue #227 slice 5: a release row's kind is generated from a record,
-    # never defaulted — the synthetic release carries one kind-carrying record.
-    write_minimal_review(root, publisher, plugin, version)
+    # Issue #227 slice 5, fold wave 1: a release row's kind is generated from
+    # a record and the release must be published — the synthetic release
+    # carries one publish record that pins its manifest.
+    write_minimal_publish(root, publisher, plugin, version)
 
 
 def _synthetic_repo(tmp_path: Path) -> tuple[Path, Ed25519PrivateKey]:

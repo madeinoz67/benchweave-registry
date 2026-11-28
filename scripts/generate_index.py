@@ -254,7 +254,10 @@ def _shared_row(key: tuple[str, str, str], path: Path, lifecycle: dict[str, Any]
 
 
 def _release_kind(
-    row_id: str, review_record: dict[str, Any], publish: dict[str, Any]
+    row_id: str,
+    review_record: dict[str, Any],
+    publish: dict[str, Any],
+    manifest_digest: str,
 ) -> tuple[str | None, str | None]:
     """``(kind, problem)`` — exactly one is set.
 
@@ -262,6 +265,13 @@ def _release_kind(
     defaulted a release with no kind-carrying record to ``admitted-release``,
     so a release directory with no records reached the catalogue as an
     admitted release. One release wears one kind, and never the shared kind.
+
+    And the release is published: a publish record pins the manifest's bytes
+    (issue #227 fold wave 1). A release with a review record and no publish
+    record carries exactly one kind, so the kind rule alone let it through.
+    This is a MIRROR, defence in depth for a run where the gate did not run
+    first — the validity gate's reverse arm (``release_without_publish_record:``)
+    is the contract and what refuses in CI.
     """
     kinds = sorted(
         {
@@ -281,6 +291,13 @@ def _release_kind(
         return None, (
             f"index_kind_shared_release:{row_id}: a release cannot be kind "
             f"{SHARED_KIND} — sharing is not an admission path (CR-57)"
+        )
+    publish_block: dict[str, Any] = publish.get("lifecycle", {})
+    if publish_block.get("release_manifest_sha256") != manifest_digest:
+        return None, (
+            f"index_release_unpublished:{row_id}: no publish record pins this "
+            "release — a manifest under releases/ is published only by a publish "
+            "record (the validity gate refuses it: release_without_publish_record:)"
         )
     return kinds[0], None
 
@@ -408,7 +425,8 @@ def generate(root: Path) -> bytes:
             review = review_record.get("review", {})
             publish = publishes.get((publisher, plugin, version), {})
             publish_block: dict[str, Any] = publish.get("lifecycle", {})
-            kind, kind_problem = _release_kind(row_id, review_record, publish)
+            manifest_digest = sha256_hex(manifest_bytes)
+            kind, kind_problem = _release_kind(row_id, review_record, publish, manifest_digest)
             if kind_problem is not None:
                 problems.append(kind_problem)
                 continue
@@ -426,7 +444,7 @@ def generate(root: Path) -> bytes:
                     "version": manifest["version"],
                     "kind": kind,
                     "publisher": manifest.get("publisher_id", publisher),
-                    "manifest_sha256": sha256_hex(manifest_bytes),
+                    "manifest_sha256": manifest_digest,
                     "signature_state": publish_block.get(
                         "signature_state",
                         "signed-valid" if (release_dir / "manifest.sig").is_file() else "unsigned",

@@ -34,7 +34,7 @@ from issue227_tree import (
     three_kind_tree,
     with_lifecycle,
     with_top,
-    write_minimal_review,
+    write_minimal_publish,
     write_record,
 )
 
@@ -190,9 +190,10 @@ def _fixture_release(
         bound = dict(status)
         bound["release"] = _bound_release_block(release, plugin, version)
         (release / "status.json").write_bytes(_canon(bound))
-    # Issue #227 slice 5: a release row's kind is generated from a record,
-    # never defaulted — the synthetic release carries one kind-carrying record.
-    write_minimal_review(root, "northwind-instruments", plugin, version)
+    # Issue #227 slice 5, fold wave 1: a release row's kind is generated from
+    # a record and the release must be published — the synthetic release
+    # carries one publish record that pins its manifest.
+    write_minimal_publish(root, "northwind-instruments", plugin, version)
     return release
 
 
@@ -617,7 +618,8 @@ def test_yank_record_alone_keeps_the_row(tmp_path: Path) -> None:
     root.mkdir()
     _fixture_release(root)
     record_dir = root / "records" / "lifecycle" / "northwind-instruments" / "alpha-tool" / "1.0.0"
-    record_dir.mkdir(parents=True)
+    # the fixture's publish record already lives here (issue #227 fold wave 1)
+    record_dir.mkdir(parents=True, exist_ok=True)
     record_dir.joinpath("1-yank.json").write_bytes(
         _canon(
             {

@@ -52,6 +52,11 @@ separators, one trailing newline), schema-valid against
   (``shared_listing_duplicate:``), a listing's key holds no release and no
   record of another kind (``shared_listing_conflict:``), and a shared
   takedown needs a listing to unlist (``record_subject_absent:``);
+- the publish pairing is closed in BOTH directions (issue #227 fold wave 1):
+  as well as every publish record needing the manifest it pins, every manifest
+  under ``releases/`` needs a publish record whose ``release_manifest_sha256``
+  pins its bytes (``release_without_publish_record:``), so a release that was
+  reviewed but never published refuses;
 - the review block inside a published release's manifest pins the review
   record's own canonical digest, and the record's closure digest matches the
   manifest's dependency closure (the review-to-sign swap defense, CR-11/CR-14).
@@ -679,6 +684,10 @@ def validate_tree(root: Path) -> list[str]:
     findings.extend(_seq_uniqueness_findings(parsed_by_path))
 
     publish_keys: set[tuple[str, str, str]] = set()
+    #: Each key's publish-record pins (the ``release_manifest_sha256`` each
+    #: publish record names). The reverse arm below reads them from the
+    #: release's side; the per-record arm below reads the other way.
+    publish_pins: dict[tuple[str, str, str], list[str]] = {}
     yank_keys: set[tuple[str, str, str]] = set()
     advisory_ids: dict[tuple[str, str, str], set[str]] = {}
     # Fold row 2 (two-pass): the per-record arms compare against keys drawn
@@ -697,6 +706,9 @@ def validate_tree(root: Path) -> list[str]:
         )
         if lifecycle.get("op") == "publish":
             publish_keys.add(collect_key)
+            recorded_digest = lifecycle.get("release_manifest_sha256")
+            if isinstance(recorded_digest, str) and recorded_digest:
+                publish_pins.setdefault(collect_key, []).append(recorded_digest)
         elif lifecycle.get("op") in ("yank", "takedown"):
             yank_keys.add(collect_key)
         if lifecycle.get("op") == "advisory":
@@ -956,6 +968,31 @@ def validate_tree(root: Path) -> list[str]:
                 f"review_outcome_mismatch:{release_path.name}: manifest review block says "
                 f"{block.get('outcome')}, record says {review.get('outcome')}"
             )
+
+    # The reverse arm of the publish check (issue #227 fold wave 1): every
+    # manifest under releases/ is governed by a publish record that pins its
+    # bytes. The arm above reads publish record -> manifest, one direction. A
+    # manifest with NO publish record (a release reviewed but never
+    # published) was invisible to it and the index generator served that
+    # release as admitted. Read from the release's side the pairing is closed
+    # in both directions, the way the yank and advisory pairings below are.
+    for key, manifest_path in sorted(manifests.items()):
+        if sha256_hex(manifest_path.read_bytes()) in publish_pins.get(key, []):
+            continue
+        rel = manifest_path.relative_to(releases_dir).as_posix()
+        label = "/".join(str(part) for part in key)
+        # A publish record that exists but names other bytes is the forward
+        # arm's mismatch; this arm adds the release it leaves ungoverned.
+        detail = (
+            "its publish record pins other bytes"
+            if key in publish_keys
+            else "no publish record exists for it"
+        )
+        findings.append(
+            f"release_without_publish_record:{rel}: {detail} ({label}) — a "
+            "manifest under releases/ is published only by a publish record "
+            "that pins its bytes"
+        )
 
     # §2.3's reverse pairing: a served status saying yanked or revoked with
     # no governing yank/takedown record — record and served state cannot

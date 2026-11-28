@@ -841,11 +841,12 @@ def test_a_yanked_releases_advisory_appears_on_no_catalogue_surface(tmp_path: Pa
             }
         ).encode()
     )
-    # Issue #227 slice 5: a release row's kind is generated from a record,
-    # never defaulted — the synthetic release carries one kind-carrying record.
-    from issue227_tree import write_minimal_review
+    # Issue #227 slice 5, fold wave 1: a release row's kind is generated from
+    # a record and the release must be published — the synthetic release
+    # carries one publish record that pins its manifest.
+    from issue227_tree import write_minimal_publish
 
-    write_minimal_review(root, "northwind-instruments", "alpha-tool", "1.0.0")
+    write_minimal_publish(root, "northwind-instruments", "alpha-tool", "1.0.0")
     result = subprocess.run(
         [sys.executable, str(REPO / "scripts" / "generate_index.py"), "--root", str(root)],
         capture_output=True,

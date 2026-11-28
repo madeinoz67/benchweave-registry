@@ -292,22 +292,92 @@ def write_review(root: Path, record: dict[str, Any]) -> Path:
     return path
 
 
-def write_minimal_review(
+def write_minimal_publish(
     root: Path, publisher: str, plugin: str, version: str, *, kind: str = "admitted-release"
 ) -> Path:
-    """The least a release needs for a catalogue row (issue #227 slice 5): one
-    kind-carrying record. The synthetic release trees of the generator and
-    page suites carry this and nothing more — a row's kind is generated from a
-    record, never defaulted."""
-    return write_review(
+    """The least a release needs for a catalogue row: one PUBLISH record that
+    carries the kind and pins the manifest on disk (issue #227 slice 5, fold
+    wave 1). The synthetic release trees of the generator and page suites
+    carry this and nothing more — they never run the validity gate. Call it
+    AFTER the manifest is written: the pin is the manifest's bytes on disk.
+
+    A review record alone is not enough any more. A release with a review
+    record and no publish record carried exactly one kind, so the kind rule
+    let it through and the catalogue served a release nobody published.
+    """
+    manifest_path = (
+        root / "releases" / "benchweave-registry" / publisher / plugin / version / "manifest.json"
+    )
+    return write_record(
         root,
         {
             "actor": "madeinoz67",
             "created_at": "2026-10-02T00:00:00Z",
             "kind": kind,
-            "record_type": "review",
+            "record_type": "lifecycle",
             "record_version": "1.0.0",
-            "review": {"plugin": plugin, "publisher": publisher, "version": version},
+            "lifecycle": {
+                "op": "publish",
+                "publisher": publisher,
+                "plugin": plugin,
+                "version": version,
+                "reason": "minimal publish record: the row's kind and its pin",
+                "release_manifest_sha256": vr.sha256_hex(manifest_path.read_bytes()),
+            },
+        },
+    )
+
+
+def publish_release(root: Path, key: Key, *, kind: str = "admitted-release") -> Path:
+    """Turn a bare release into a PUBLISHED one for the validity gate (issue
+    #227 fold wave 1: every manifest under releases/ needs a publish record
+    that pins it).
+
+    Reads the manifest already on disk at ``key``, adds the review block that
+    pins a new review record, rewrites the manifest, writes the review record
+    and then a publish record pinning the manifest's new bytes — the digest
+    chain the gate's publish arm walks. Returns the publish record's path.
+
+    The publish record takes the key's NEXT FREE file sequence, so a test's
+    own record plants keep their sequence numbers. The gate pairs the publish
+    record with its manifest by key and digest, never by file order.
+    """
+    publisher, plugin, version = key
+    manifest_path = root / "releases" / "benchweave-registry" / publisher / plugin / version
+    manifest_path = manifest_path / "manifest.json"
+    manifest: Any = json.loads(manifest_path.read_bytes())
+    expected = vr.closure_digest_of_dependencies(manifest.get("dependencies", []))
+    review = review_record(key, kind)
+    review["review"]["closure_digest"] = expected
+    manifest["review"] = {
+        "checklist_id": "review-checklist",
+        "checklist_version": "1",
+        "outcome": "accepted",
+        "record_sha256": vr.sha256_hex(_canon(review)),
+        "reviewer_id": "madeinoz67",
+    }
+    manifest_bytes = _canon(manifest)
+    manifest_path.write_bytes(manifest_bytes)
+    write_review(root, review)
+    return write_record(
+        root,
+        {
+            "actor": "madeinoz67",
+            "created_at": "2026-10-02T00:00:00Z",
+            "kind": kind,
+            "record_type": "lifecycle",
+            "record_version": "1.0.0",
+            "lifecycle": {
+                "op": "publish",
+                "publisher": publisher,
+                "plugin": plugin,
+                "version": version,
+                "reason": "fixture publish record: every release under releases/ is published",
+                "release_manifest_sha256": vr.sha256_hex(manifest_bytes),
+                "closure": {"prior": None, "added": [], "changed": [], "removed": []},
+                "closure_digest": expected,
+                "signature_state": "unsigned",
+            },
         },
     )
 
