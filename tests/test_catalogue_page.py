@@ -841,6 +841,12 @@ def test_a_yanked_releases_advisory_appears_on_no_catalogue_surface(tmp_path: Pa
             }
         ).encode()
     )
+    # Issue #227 slice 5, fold wave 1: a release row's kind is generated from
+    # a record and the release must be published — the synthetic release
+    # carries one publish record that pins its manifest.
+    from issue227_tree import write_minimal_publish
+
+    write_minimal_publish(root, "northwind-instruments", "alpha-tool", "1.0.0")
     result = subprocess.run(
         [sys.executable, str(REPO / "scripts" / "generate_index.py"), "--root", str(root)],
         capture_output=True,
@@ -1059,3 +1065,88 @@ def test_the_family_links_are_present_on_both_page_kinds() -> None:
         for href in ("https://www.benchweave.dev/", "https://sdk.benchweave.dev/"):
             i = markup.index(f'href="{href}"')
             assert 'rel="noopener"' in markup[i : i + 200], f"family link without noopener: {href}"
+
+
+# ── issue #227 slice 5: the catalogue page's kind surface (E1, E3) ──────────
+
+#: The legend's third kind line (CR-56/CR-58; ASD-STE100 register).
+SHARED_LEGEND_LINE = (
+    "<b>Community shared</b>: the author shared the entry. The registry did not "
+    "review it. It is not an admitted release."
+)
+
+
+def test_the_legend_explains_the_community_shared_kind() -> None:
+    """The Kind select offers Community shared, so the legend must say what it
+    is: the author shared it, the registry did not review it, and it is not an
+    admitted release. Present in the template and in the render; the pinned
+    lede is unchanged."""
+    rendered = _render(FIXTURE.read_bytes())
+    for surface, what in ((_template(), "the template"), (rendered, "the page")):
+        assert SHARED_LEGEND_LINE in surface, f"{what} does not explain the shared kind"
+        assert "Review is process, not proof" in surface, f"{what} lost its marker legend"
+    assert LEDE in _render(FIXTURE.read_bytes())
+
+
+def test_the_empty_state_speaks_of_entries_not_releases() -> None:
+    """A filtered view can hold a shared listing, which is not a release: the
+    empty state and the form's label speak of entries."""
+    page = _render(FIXTURE.read_bytes())
+    assert "No entries match the current filters." in page
+    assert "No releases match" not in page
+    assert 'aria-label="Filter entries"' in page
+    # the honest-empty ROW (an empty catalogue) keeps its release wording: it
+    # is the default view's sentence, and that view holds releases only
+    empty = _render(b'{"index_version": 1, "rows": []}')
+    assert "No published releases yet" in empty
+
+
+def _caption(node: str, rows_path: Path, query: str) -> str:
+    script = (
+        "const m = require(process.argv[1]);"
+        "const fs = require('fs');"
+        "const rows = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).rows;"
+        "process.stdout.write(m.captionText(m.filterRows(rows, JSON.parse(process.argv[3]))));"
+    )
+    result = subprocess.run(
+        [node, "-e", script, str(PLUGINS_JS), str(rows_path), query],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout
+
+
+def test_the_caption_counts_entries_when_a_listing_is_in_view() -> None:
+    """The caption's noun follows what is in view: a community-shared listing
+    is not a release, so a view that holds one counts entries. The default
+    view and an admitted-only view keep counting releases."""
+    node = shutil.which("node")
+    assert node is not None, "node missing — see test_node_is_present in the search suite"
+    module = _module()
+    tail = module.CAPTION_TAIL
+    shared = _caption(node, FIXTURE, '{"kind": "community-shared", "signature_state": "all"}')
+    assert shared == f"2 entries. {tail}", shared
+    mixed = _caption(node, FIXTURE, '{"kind": "all", "signature_state": "all"}')
+    assert mixed == f"11 entries. {tail}", mixed
+    admitted = _caption(node, FIXTURE, '{"kind": "admitted-release", "signature_state": "all"}')
+    assert admitted == f"8 releases. {tail}", admitted
+
+
+def test_the_default_view_caption_is_the_static_caption() -> None:
+    """Twin: under the UI's own default query the wiring's caption is
+    byte-identical to the generator's static caption (the browser arm
+    compares the two)."""
+    node = shutil.which("node")
+    assert node is not None, "node missing — see test_node_is_present in the search suite"
+    module = _module()
+    rows = json.loads(FIXTURE.read_bytes())["rows"]
+    defaults = [row for row in rows if module._default_row(row)]
+    live = _caption(
+        node, FIXTURE, json.dumps({"kind": "admitted-release", "signature_state": "signed-valid"})
+    )
+    assert live == module._caption_html(len(defaults))
+    none = _caption(node, FIXTURE, '{"text": "zz-no-such-plugin-anywhere"}')
+    assert none == module._caption_html(0), none

@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 import validate_records as vr
+from issue227_tree import publish_release
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -258,12 +259,21 @@ def test_review_record_digest_mismatch_is_refused(tmp_path: Path) -> None:
 
 
 def test_dev_prefixed_registry_id_in_record_is_refused(tmp_path: Path) -> None:
-    """CR-35's records half: dev-unsigned lineage never reaches a committed record."""
+    """CR-35's records half: dev-unsigned lineage never reaches a committed record.
+
+    Issue #227 fold wave 1: the dev- prefix is matched against the record's
+    registry-id fields, never against free text, so the dev id is planted
+    where a registry id lives. The records schema admits no such member and
+    refuses it too; the lineage arm keeps reading it, so both refuse. Until
+    this fold the plant was a dev id inside ``review.notes``, a free-text
+    mention that is not lineage (tests/test_issue227_arms.py now asserts the
+    other way for that plant)."""
     record = review_record()
-    record["review"]["notes"] = "depends on dev-local/mutant"
+    record["registry_id"] = "dev-local"
     tree_with(tmp_path, {"review-1.json": record})
     findings = vr.validate_tree(tmp_path)
     assert any(f.startswith("dev_lineage_in_records:") for f in findings), findings
+    assert any("record_schema_invalid" in f for f in findings), findings
 
 
 def test_main_returns_zero_on_valid_tree(
@@ -544,6 +554,8 @@ def _yank_tree_with(root: Path, status: dict[str, Any] | None) -> Path:
     yank_dir = root / "records" / "lifecycle" / "madeinoz67" / "dps150" / "0.1.0"
     yank_dir.mkdir(parents=True, exist_ok=True)
     (yank_dir / "2-yank.json").write_bytes(vr.canonical_bytes(_yank_record()))
+    # Issue #227 fold wave 1: every release needs a publish record that pins it.
+    publish_release(root, ("madeinoz67", "dps150", "0.1.0"))
     # Fold rows 3+8: a tree with records must carry its authorities.
     repo = Path(__file__).resolve().parents[1]
     (root / "records" / "publishers.json").write_bytes(

@@ -25,6 +25,12 @@ plus the static-deploy posture:
 - a cloned multi-evidence / capability-bearing row stacks its cell badges
   in .cell-stack exactly like a static row (fold F8), wherever the served
   index carries such a row;
+- a community-shared listing is tagged and unverified in every view (issue
+  #227 slice 5, E2/E3), wherever the served index carries one: the default
+  listing holds none; the kind filter returns exactly the shared set; a
+  mixed view tags every row and nothing but an admitted release reads
+  "Admitted release"; the drill-down and the standalone page carry the
+  unverified marker;
 - the theme toggle flips ``data-theme`` on the html element (§2.1);
 - every ``[data-bw-slot]`` descends from its ``tr.bw-row`` in the real
   DOM (no orphan rows; kind badge inside the Release cell on every row);
@@ -236,15 +242,19 @@ def main() -> int:
             # the signature filter reveals an unsigned row with the unsigned
             # cell (icon + visible text — B-I's browser half). The text filter
             # from the match flow above is cleared first (its needle names a
-            # SIGNED row and would AND the reveal away).
+            # SIGNED row and would AND the reveal away). Issue #227 slice 5:
+            # the kind select goes to "all" first — left on its default
+            # (admitted releases) an index whose unsigned rows are all
+            # in-tree fixtures or shared listings revealed NOTHING and failed
+            # the deploy, so the first real shared listing would have shipped
+            # that failure.
             if unsigned:
                 page.fill("#q", "")
                 page.wait_for_timeout(400)
+                page.select_option("#kind", "all")
                 page.select_option("#sig", "unsigned")
                 page.wait_for_timeout(300)
-                revealed = page.locator(
-                    "#release-rows tr.bw-row[data-bw-package-id]:not([hidden])"
-                )
+                revealed = page.locator("#release-rows tr.bw-row[data-bw-package-id]:not([hidden])")
                 _check(
                     revealed.count() >= 1,
                     "the unsigned filter revealed no rows (the fixture/deployed "
@@ -262,6 +272,7 @@ def main() -> int:
                     f"the unsigned cell lost its title: {title!r}",
                 )
                 page.select_option("#sig", "signed-valid")
+                page.select_option("#kind", "admitted-release")
 
             # the theme toggle flips data-theme on the html element
             page.click("#bw-theme-toggle")
@@ -546,6 +557,117 @@ def main() -> int:
             page.click("#bw-clear-filters")
             page.wait_for_timeout(400)
 
+            # Issue #227 slice 5 (E2, E3): a community-shared listing is
+            # tagged and unverified in EVERY view. Fires wherever the served
+            # index carries one (the battery's three-kind site; a deploy with
+            # no listing skips).
+            shared = [row for row in rows if row.get("kind") == "community-shared"]
+            shared_ids = [str(row["package_id"]) for row in shared]
+            if shared:
+                visible = (
+                    "() => Array.from(document.querySelectorAll("
+                    "'#release-rows tr.bw-row[data-bw-package-id]:not([hidden])'))"
+                    ".map((row) => ({"
+                    " id: row.getAttribute('data-bw-package-id'),"
+                    " kind: ((row.querySelector('td.td-release [data-bw-slot=\"kind\"]') || {})"
+                    ".textContent || '').trim(),"
+                    " markers: ((row.querySelector('[data-bw-slot=\"markers\"]') || {})"
+                    ".textContent || '')"
+                    "}))"
+                )
+                # S1: the default available listing holds no shared row
+                _check(
+                    not set(shared_ids) & {item["id"] for item in page.evaluate(visible)},
+                    "a community-shared listing is in the default available listing",
+                )
+                # S2: the kind filter returns EXACTLY the shared set, and
+                # every row of it is tagged and carries its unverified marker
+                page.select_option("#kind", "community-shared")
+                page.select_option("#sig", "all")
+                page.wait_for_timeout(300)
+                listed = page.evaluate(visible)
+                _check(
+                    sorted(item["id"] for item in listed) == sorted(shared_ids),
+                    f"kind=community-shared rendered {sorted(i['id'] for i in listed)}, "
+                    f"expected exactly the shared set {sorted(shared_ids)}",
+                )
+                for item in listed:
+                    _check(
+                        item["kind"] == "Community shared",
+                        f"shared row {item['id']} renders the kind badge {item['kind']!r}",
+                    )
+                    _check(
+                        "shared by the author, not reviewed" in item["markers"],
+                        f"shared row {item['id']} renders no unverified marker",
+                    )
+                caption = page.locator("#catalogue-count").inner_text().strip()
+                _check(
+                    caption.startswith(f"{len(shared)} entr"),
+                    f"the caption calls a shared listing a release: {caption!r}",
+                )
+                # S3: a mixed view shows every row's tag, and nothing but an
+                # admitted release reads "Admitted release"
+                page.select_option("#kind", "all")
+                page.wait_for_timeout(300)
+                mixed = page.evaluate(visible)
+                kind_by_id = {str(row["package_id"]): str(row.get("kind")) for row in rows}
+                _check(
+                    sorted(item["id"] for item in mixed) == sorted(kind_by_id),
+                    "the all-kinds view is not the whole index",
+                )
+                for item in mixed:
+                    _check(
+                        item["kind"] != "",
+                        f"row {item['id']} renders no kind badge in a mixed view",
+                    )
+                    if kind_by_id[item["id"]] != "admitted-release":
+                        _check(
+                            "Admitted release" not in item["kind"],
+                            f"row {item['id']} ({kind_by_id[item['id']]}) reads as admitted",
+                        )
+                # S4: the drill-down carries the kind and the marker, and
+                # makes no signature claim
+                first = shared[0]
+                shared_anchor = page.locator(
+                    f'tr.bw-row[data-bw-package-id="{first["package_id"]}"] a.release-name'
+                )
+                shared_anchor.click()
+                page.wait_for_timeout(500)
+                detail = page.locator(
+                    "tr.bw-detail-row:not([hidden]) .bw-detail-host #release-detail"
+                )
+                _check(detail.count() == 1, "the shared row's drill-down opened no detail")
+                detail_text = detail.inner_text()
+                _check(
+                    "Community shared" in detail_text
+                    and "community-shared-not-reviewed" in detail_text,
+                    "the drill-down of a shared listing lost its kind or its marker",
+                )
+                _check(
+                    "Valid against the recorded ed25519 key" not in detail_text,
+                    "the drill-down of a shared listing makes a signature claim",
+                )
+                # S5: the standalone page serves without JavaScript and
+                # carries the marker there too
+                shared_url = (
+                    f"records/{first.get('registry_id')}/{first.get('package_id')}"
+                    f"/{first.get('version')}/index.html"
+                )
+                nojs_shared = browser.new_context(java_script_enabled=False)
+                shared_page = nojs_shared.new_page()
+                shared_response = shared_page.goto(origin + "/" + shared_url, wait_until="load")
+                _check(
+                    shared_response is not None and shared_response.status == 200,
+                    f"the shared listing page did not serve 200 without JS: {shared_url}",
+                )
+                _check(
+                    "community-shared-not-reviewed" in shared_page.content(),
+                    "the standalone shared listing page lost its marker",
+                )
+                nojs_shared.close()
+                page.click("#bw-clear-filters")
+                page.wait_for_timeout(400)
+
             # a non-matching query empties the table with the honest state
             page.fill("#q", "zz-no-such-plugin-anywhere")
             page.wait_for_timeout(400)
@@ -564,7 +686,8 @@ def main() -> int:
             # requests (favicon probe included) are not search-originated;
             # and the same-origin index fetch DID happen.
             off_origin = [
-                url for url in requests
+                url
+                for url in requests
                 if not (
                     url.startswith(origin + "/")
                     or url.startswith("https://fonts.googleapis.com/")
@@ -583,6 +706,12 @@ def main() -> int:
             context.close()
     finally:
         server.shutdown()
+    shared_note = (
+        f", and {len(shared)} community-shared listing(s) are tagged and "
+        "unverified in every view (filter, mixed view, drill-down, standalone page)"
+        if shared
+        else ""
+    )
     print(
         f"OK browser arm: {len(defaults)} default row(s) render statically, "
         "containment holds in the real DOM, queries match and empty honestly, "
@@ -590,7 +719,7 @@ def main() -> int:
         "writes the clean catalogue URL, the drill survives its own pushed URL "
         "(reopen and second-row), cloned rows stack, the unsigned reveal and "
         "the theme toggle work, and the only non-asset session request is the "
-        "same-origin index fetch"
+        f"same-origin index fetch{shared_note}"
     )
     return 0
 

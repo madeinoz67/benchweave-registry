@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import validate_records as vr
+from issue227_tree import publish_release
 
 REPO = Path(__file__).resolve().parents[1]
 FIXTURES = REPO / "tests" / "fixtures" / "issue225"
@@ -477,6 +478,8 @@ def test_coherent_yank_passes(tmp_path: Path) -> None:
         "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
         extra={"release_manifest_sha256": HEX64, "status_sequence": 2},
     ))
+    # Issue #227 fold wave 1: every release needs a publish record that pins it.
+    publish_release(root, ("northwind-instruments", "alpha-tool", "1.0.0"))
     assert _findings(root) == []
 
 
@@ -517,6 +520,8 @@ def test_yank_then_advise_tree_is_valid(tmp_path: Path) -> None:
             "summary": "s", "url": "https://example.invalid/b",
         }},
     ), seq=3)
+    # Issue #227 fold wave 1: every release needs a publish record that pins it.
+    publish_release(root, ("northwind-instruments", "alpha-tool", "1.0.0"))
     assert _findings(root) == []
 
 
@@ -554,6 +559,8 @@ def test_advisory_present_in_served_status_passes(tmp_path: Path) -> None:
             "summary": "s", "url": "https://example.invalid/b",
         }},
     ))
+    # Issue #227 fold wave 1: every release needs a publish record that pins it.
+    publish_release(root, ("northwind-instruments", "alpha-tool", "1.0.0"))
     assert _findings(root) == []
 
 
@@ -650,6 +657,8 @@ def test_coherent_transfer_passes(tmp_path: Path) -> None:
     root = _gate_tree(tmp_path)
     _release(root, "northwind-instruments", "gamma-tool", "1.0.0")
     _plant(root, _transfer_record())
+    # Issue #227 fold wave 1: every release needs a publish record that pins it.
+    publish_release(root, ("northwind-instruments", "gamma-tool", "1.0.0"))
     assert _findings(root) == []
 
 
@@ -930,6 +939,8 @@ def test_takedown_record_needs_no_status_sequence(tmp_path: Path) -> None:
         "takedown", publisher="northwind-instruments", plugin="alpha-tool",
         version="1.0.0",
     ), seq=2)
+    # Issue #227 fold wave 1: every release needs a publish record that pins it.
+    publish_release(root, ("northwind-instruments", "alpha-tool", "1.0.0"))
     assert _findings(root) == []
 
 
@@ -949,6 +960,8 @@ def test_re_yank_multiplicity_is_representable(tmp_path: Path) -> None:
         "yank", publisher="northwind-instruments", plugin="alpha-tool", version="1.0.0",
         extra={"release_manifest_sha256": HEX64, "status_sequence": 3},
     ), seq=3)
+    # Issue #227 fold wave 1: every release needs a publish record that pins it.
+    publish_release(root, ("northwind-instruments", "alpha-tool", "1.0.0"))
     assert _findings(root) == []
 
 

@@ -24,14 +24,31 @@
    follow-on §2.3 — row data is data); the no-JS view is the honest default
    view. */
 
-/* The two slice-1 unverified markers' display strings — a TWIN of
+/* The unverified markers' display strings — a TWIN of
    scripts/generate_catalogue_page.py MARKER_DISPLAY, pinned byte-equal by
    tests/test_catalogue_page.py. Unknown marker ids render verbatim
-   (forward-honest, never dropped). */
+   (forward-honest, never dropped). The third entry is slice 5's (issue #227):
+   the marker every community-shared row carries. */
 var MARKER_DISPLAY = {
   'conformance-evidence-self-attested': 'conformance evidence self-attested',
-  'review-is-process-not-proof': 'review is process, not proof'
+  'review-is-process-not-proof': 'review is process, not proof',
+  'community-shared-not-reviewed': 'shared by the author, not reviewed'
 };
+
+/* CR-57 (issue #227 slice 5): a community-shared row's marker is STRUCTURAL.
+   It derives from the row's KIND, never from the row's own marker list alone,
+   so no shared row can clone without it — an empty or foreign list still
+   renders the marker. The generator's rowMarkers is the twin. */
+var SHARED_KIND = 'community-shared';
+var SHARED_MARKER = 'community-shared-not-reviewed';
+
+function rowMarkers(row) {
+  var markers = (row.unverified_markers || []).slice();
+  if (row.kind === SHARED_KIND && markers.indexOf(SHARED_MARKER) === -1) {
+    markers.unshift(SHARED_MARKER);
+  }
+  return markers;
+}
 
 /* Kind badge text — a TWIN of the generator's KIND_DISPLAY (the mockup's
    display case; CR-56: a row never renders without its kind badge). */
@@ -62,6 +79,27 @@ var MAINTENANCE_BADGE = {
 var TRUNCATE_AT = 12;
 
 var DEFAULT_QUERY = { kind: 'admitted-release', signature_state: 'signed-valid' };
+
+/* The table caption's fixed tail — a TWIN of the generator's CAPTION_TAIL. */
+var CAPTION_TAIL = 'Select a name for its provenance, evidence and files.';
+
+/* The table caption (issue #227 slice 5). The noun follows what is in view:
+   a community-shared listing is not a release, so a view that holds one
+   counts entries. A view of admitted releases only keeps counting releases,
+   which keeps the default view's caption byte-identical to the static one
+   the generator stamps (a twin of its _caption_html). */
+function captionText(matches, query) {
+  var rows = matches || [];
+  query = query || {};
+  var onlyReleases = rows.length
+    ? rows.every(function (row) { return row.kind === 'admitted-release'; })
+    : isNoFilter(query.kind) || query.kind === 'admitted-release';
+  var noun = onlyReleases ? 'release' : 'entry';
+  var plural = onlyReleases ? 'releases' : 'entries';
+  return (
+    rows.length + (rows.length === 1 ? ' ' + noun + '. ' : ' ' + plural + '. ') + CAPTION_TAIL
+  );
+}
 
 /* Lucide icon bodies for cloned rows — TWINS of the generator's ICONS
    (every body is circle/rect-free; §2.8's icon-rewrite pick). */
@@ -181,7 +219,7 @@ function rowSlots(row) {
     'release-line': String(row.package_id || '') + ' · ' + String(row.version || ''),
     publisher: String(row.publisher || ''),
     kind: KIND_DISPLAY[String(row.kind || '')] || String(row.kind || ''),
-    markers: markerTexts(row.unverified_markers),
+    markers: markerTexts(rowMarkers(row)),
     signature: row.signature_state === 'signed-valid' ? 'signed' : 'unsigned',
     'maintenance-text': MAINTENANCE_DISPLAY[maintenance] || maintenance,
     'maintenance-class': MAINTENANCE_BADGE[maintenance] || 'badge-muted',
@@ -228,6 +266,7 @@ if (typeof module !== 'undefined' && module.exports) {
     rowKey: rowKey,
     detailId: detailId,
     recordUrl: recordUrl,
+    captionText: captionText,
     DEFAULT_QUERY: DEFAULT_QUERY,
     MARKER_DISPLAY: MARKER_DISPLAY,
     KIND_DISPLAY: KIND_DISPLAY,
@@ -533,11 +572,7 @@ if (typeof module !== 'undefined' && module.exports) {
         pair.detail.setAttribute('hidden', '');
       }
     });
-    if (captionEl) {
-      captionEl.textContent =
-        matches.length + (matches.length === 1 ? ' release. ' : ' releases. ') +
-        'Select a name for its provenance, evidence and files.';
-    }
+    if (captionEl) captionEl.textContent = captionText(matches, query);
     if (shownEl) shownEl.textContent = String(matches.length);
     if (emptyEl) {
       if (matches.length) emptyEl.setAttribute('hidden', '');

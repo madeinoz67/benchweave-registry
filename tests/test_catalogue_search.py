@@ -159,9 +159,11 @@ def test_fixture_carries_cr24s_denominator() -> None:
     """The 11-row fixture represents every dimension value the arms need.
 
     CR-24's own denominator (10 rows, all dimensions represented) grown by the
-    #224 follow-on with ONE hardware-evidence row: 3 publishers; kinds
+    #224 follow-on with ONE hardware-evidence row and by issue #227 slice 5
+    with the generated shape for its two shared rows: 3 publishers; kinds
     admitted-release x8, community-shared x2, in-tree-fixture x1; signature
-    signed x8 / unsigned x3; all four maintenance values; stg_versions
+    signed x7 / unsigned x4 (a shared row is never signed); all four
+    maintenance values; stg_versions
     {1.4, 1.5} and otdp_versions {0.2.1, 0.2.2}; all eight capability boolean
     combinations; advisories on at least two rows; evidence levels
     {hardware, simulated, structural} represented (the follow-on's evidence
@@ -176,8 +178,8 @@ def test_fixture_carries_cr24s_denominator() -> None:
     assert kinds.count("community-shared") == 2
     assert kinds.count("in-tree-fixture") == 1
     signatures = [row["signature_state"] for row in rows]
-    assert signatures.count("signed-valid") == 8
-    assert signatures.count("unsigned") == 3
+    assert signatures.count("signed-valid") == 7
+    assert signatures.count("unsigned") == 4
     assert {row["maintenance"] for row in rows} == {
         "maintained", "maintenance_only", "unmaintained", "unknown",
     }
@@ -324,6 +326,79 @@ def test_yanked_release_is_unreachable_by_search() -> None:
     )
     result = subprocess.run(
         [node, "-e", script, str(PLUGINS_JS), str(index_path), pid],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "OK" in result.stdout
+
+
+def test_the_fixture_rows_conform_to_the_index_schema() -> None:
+    """Issue #227 slice 5: the fixture is an index document. Its rows validate
+    against ``records/index.schema.json`` (the ``comment`` member is the
+    fixture's own annotation and the one member the schema does not know), and
+    its two community-shared rows satisfy the shared-row contract: unsigned,
+    the unverified marker, the pinned source, no release-class claim. The
+    pre-slice fixture carried a SIGNED community-shared row — a state the
+    generator cannot produce."""
+    import jsonschema
+
+    schema = json.loads((REPO / "records" / "index.schema.json").read_bytes())
+    document = {
+        key: value
+        for key, value in json.loads(FIXTURE.read_text(encoding="utf-8")).items()
+        if key != "comment"
+    }
+    errors = sorted(jsonschema.Draft202012Validator(schema).iter_errors(document), key=str)
+    assert errors == [], [f"{error.json_path}: {error.message}" for error in errors]
+    shared = [row for row in document["rows"] if row["kind"] == "community-shared"]
+    assert len(shared) == 2
+    for row in shared:
+        assert row["signature_state"] == "unsigned"
+        assert row["unverified_markers"] == ["community-shared-not-reviewed"]
+        assert row["source_url"] and row["source_url"].startswith("https://")
+        assert row["evidence"] == [] and row["maintenance"] == "unknown"
+
+
+def test_shared_rows_carry_the_kind_and_the_structural_marker_in_every_view() -> None:
+    """E2, E3 and E5 on the cloned-row projection (node over the file the page
+    serves): every row of every truth-table view wears its kind badge; the
+    UI's default view holds no shared row; ``kind=community-shared`` is
+    exactly the shared set; and a shared row renders its unverified marker
+    even when the index row's own marker list is empty."""
+    node = shutil.which("node")
+    assert node is not None, "node missing — see test_node_is_present"
+    script = (
+        "const m = require(process.argv[1]);"
+        "const fs = require('fs');"
+        "const rows = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).rows;"
+        "const table = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')).cases;"
+        "const bad = [];"
+        "for (const c of table) for (const r of m.filterRows(rows, c.query)) {"
+        "  if (m.rowSlots(r).kind !== m.KIND_DISPLAY[r.kind])"
+        "    bad.push('untagged:' + r.package_id); }"
+        "const shared = rows.filter((r) => r.kind === 'community-shared');"
+        "for (const r of shared) {"
+        "  const s = m.rowSlots({ ...r, unverified_markers: [] });"
+        "  if (!s.markers.includes('shared by the author, not reviewed'))"
+        "    bad.push('marker:' + r.package_id);"
+        "  if (s.signature !== 'unsigned') bad.push('signed:' + r.package_id); }"
+        "const inDefault = m.filterRows(rows, m.DEFAULT_QUERY);"
+        "if (inDefault.some((r) => r.kind === 'community-shared')) bad.push('default');"
+        "if (bad.length) { console.error(bad.join(' ')); process.exit(1); }"
+        "console.log('OK');"
+    )
+    result = subprocess.run(
+        [
+            node,
+            "-e",
+            script,
+            str(PLUGINS_JS),
+            str(FIXTURE),
+            str(TRUTH_TABLE),
+        ],
         capture_output=True,
         text=True,
         check=False,

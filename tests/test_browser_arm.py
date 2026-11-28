@@ -27,6 +27,7 @@ from typing import Any
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from issue227_tree import generate, three_kind_tree
 from test_catalogue_record import SHA, _run, _write_release
 
 REPO = Path(__file__).resolve().parents[1]
@@ -80,7 +81,7 @@ def _browser_site(root: Path, private: Ed25519PrivateKey) -> None:
     # index generator's join); a minimal record is enough — the records
     # tree of a synthetic page-generation site never runs the validity gate
     review_dir = root / "records" / "submissions" / "quarrystone-labs" / "beta-probe" / "0.3.0"
-    review_dir.mkdir(parents=True)
+    review_dir.mkdir(parents=True, exist_ok=True)
     (review_dir / "review-1.json").write_text(
         json.dumps(
             {
@@ -131,10 +132,70 @@ def test_the_browser_arm_passes_on_a_multi_row_site(tmp_path: Path) -> None:
     uv = shutil.which("uv")
     assert uv is not None, "uv is required to provision playwright for the browser arm"
     result = subprocess.run(
-        [uv, "run", "--with", "playwright", "python", str(BROWSER_SCRIPT),
-         "--dest", str(dest)],
-        capture_output=True, text=True, check=False, cwd=REPO,
+        [uv, "run", "--with", "playwright", "python", str(BROWSER_SCRIPT), "--dest", str(dest)],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO,
         env={**os.environ, "UV_PROJECT_ENVIRONMENT": "venv"},
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "OK browser arm" in result.stdout, result.stdout + result.stderr
+
+
+def _browser_gate(dest: Path) -> subprocess.CompletedProcess[str]:
+    """The deploy gate's own script, provisioned exactly as the workflow
+    does (playwright is a CI-transient dep, never a project dependency)."""
+    uv = shutil.which("uv")
+    assert uv is not None, "uv is required to provision playwright for the browser arm"
+    return subprocess.run(
+        [uv, "run", "--with", "playwright", "python", str(BROWSER_SCRIPT), "--dest", str(dest)],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO,
+        env={**os.environ, "UV_PROJECT_ENVIRONMENT": "venv"},
+    )
+
+
+@pytest.mark.browser
+def test_the_browser_arm_proves_shared_listings_on_a_three_kind_site(tmp_path: Path) -> None:
+    """Issue #227 slice 5, E2 and E3 in a real browser, through the deploy
+    gate's own script, on a site whose index holds one entry of each kind.
+
+    The script's shared-listing sequences fire wherever the served index
+    carries a community-shared row: the default listing holds none; the kind
+    filter returns exactly the shared set, every row tagged and unverified; a
+    mixed view tags every row and nothing but an admitted release reads
+    'Admitted release'; the drill-down and the standalone page carry the
+    marker. The OK line must say they fired — a script without the sequences
+    also exits 0 on this site, so the line is the evidence."""
+    root = tmp_path / "repo"
+    three_kind_tree(root, site_sources=True)
+    generate(root)
+    dest = tmp_path / "site"
+    generated = _run(
+        [
+            sys.executable,
+            str(REPO / "scripts" / "generate_catalogue_page.py"),
+            "--root",
+            str(root),
+            "--dest",
+            str(dest),
+            "--sha",
+            SHA,
+        ]
+    )
+    assert generated.returncode == 0, generated.stderr
+    rows: list[dict[str, Any]] = json.loads((dest / "index.json").read_text())["rows"]
+    assert sorted(row["kind"] for row in rows) == [
+        "admitted-release",
+        "community-shared",
+        "in-tree-fixture",
+    ]
+    result = _browser_gate(dest)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "OK browser arm" in result.stdout, result.stdout
+    assert "1 community-shared listing" in result.stdout, (
+        "the shared-listing sequences did not fire:\n" + result.stdout
+    )

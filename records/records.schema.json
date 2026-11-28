@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:benchweave-registry:records:1.1.0",
+  "$id": "urn:benchweave-registry:records:1.2.0",
   "title": "BenchWeave registry lane records",
   "description": "Canonical-JSON review and lifecycle records committed in this repository. Structural validity does not establish trust; the records-validity CI and the admission replay are the machine checks, and identified human review is the accountable one.",
   "type": "object",
@@ -21,9 +21,10 @@
     "record_version": {
       "enum": [
         "1.0.0",
-        "1.1.0"
+        "1.1.0",
+        "1.2.0"
       ],
-      "description": "The 1.1.0 enum arm (issue #225 slice 3, F4): records valid at 1.1.0 add withdraw and the per-op required blocks; every 1.0.0 record stays valid forever \u2014 no restamp."
+      "description": "The 1.1.0 enum arm (issue #225 slice 3, F4): records valid at 1.1.0 add withdraw and the per-op required blocks; every 1.0.0 record stays valid forever \u2014 no restamp. The 1.2.0 enum arm (issue #227 slice 5) adds the share op and its carried set (the lifecycle shared block); every earlier record stays valid \u2014 no restamp."
     },
     "kind": {
       "enum": [
@@ -31,7 +32,7 @@
         "in-tree-fixture",
         "community-shared"
       ],
-      "description": "CR-56 kind tag. Machine-checked at write time; a records entry without a kind is refused."
+      "description": "CR-56 kind tag. Machine-checked at write time; a records entry without a kind is refused, and the kind must agree with what the record is (issue #227 slice 5): community-shared rides only share and takedown records of a shared listing; a review or release lifecycle record never carries it."
     },
     "created_at": {
       "type": "string",
@@ -219,7 +220,8 @@
             "unlist",
             "takedown",
             "transfer",
-            "withdraw"
+            "withdraw",
+            "share"
           ]
         },
         "publisher": {
@@ -449,6 +451,113 @@
         "timestamp_recommended": {
           "type": "boolean",
           "description": "Advisory (owner refinement 2026-10-02): timestamping is optional but recommended. True on a signed-but-untimestamped release - an un-timestamped signature is valid until the key expires; a timestamped one stays valid past expiry or revocation. Never a refusal."
+        },
+        "shared": {
+          "type": "object",
+          "required": [
+            "display_name",
+            "summary",
+            "source",
+            "licence_spdx",
+            "compatibility",
+            "capabilities"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "display_name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "summary": {
+              "type": "string"
+            },
+            "source": {
+              "type": "object",
+              "required": [
+                "url",
+                "revision"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https://",
+                  "description": "The author's repository (https only: the catalogue links it)."
+                },
+                "revision": {
+                  "type": "string",
+                  "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$",
+                  "description": "The immutable commit digest the listing is pinned to (CR-36): a branch, a tag or any moving name refuses. The same rule as a review record's source_revision."
+                }
+              },
+              "description": "The pinned immutable source ref (CR-57): the same two-field shape as the release manifest's source block."
+            },
+            "licence_spdx": {
+              "type": "string",
+              "minLength": 1
+            },
+            "compatibility": {
+              "type": "object",
+              "required": [
+                "otdp_versions",
+                "adapter_api_versions",
+                "stg_versions"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "otdp_versions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                },
+                "adapter_api_versions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                },
+                "stg_versions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                }
+              },
+              "description": "Declared compatibility (CR-57), carried verbatim into the index row under the release manifest's own constraints (otdp and stg declared, adapter API possibly empty). Nobody checks it against the pinned source."
+            },
+            "capabilities": {
+              "type": "object",
+              "required": [
+                "network_egress",
+                "subprocess_or_native_library",
+                "filesystem_writes_beyond_evidence_retention"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "network_egress": {
+                  "type": "boolean"
+                },
+                "subprocess_or_native_library": {
+                  "type": "boolean"
+                },
+                "filesystem_writes_beyond_evidence_retention": {
+                  "type": "boolean"
+                }
+              },
+              "description": "CR-45's closed three-way enumeration, declared by the author; all-false is the explicit 'none'. Discovery input only: nothing verifies the declaration."
+            }
+          },
+          "description": "CR-57 (issue #227 slice 5): the author-declared content of a community-shared listing. Every value here is declared by the publisher and reviewed by nobody; the index renders it with the unverified marker. A listing carries no signature, status document, closure or release digest: a shared listing is not a release, and sharing is not an admission path. Required when the op is share."
         }
       }
     }
@@ -607,6 +716,31 @@
           "lifecycle": {
             "required": [
               "advisory"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "lifecycle"
+          },
+          "lifecycle": {
+            "properties": {
+              "op": {
+                "const": "share"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "lifecycle": {
+            "required": [
+              "shared"
             ]
           }
         }

@@ -11,8 +11,10 @@ separators, one trailing newline), schema-valid against
   consumer of the join silently kept the last entry (fold F6);
 - a publish record without a closure diff, or whose sign-off names a different
   closure digest than the one published, is refused (CR-38);
-- no dev-prefixed registry id appears anywhere in the records or the published
-  releases (CR-35's index half);
+- no dev-prefixed registry id reaches a record or a published release
+  (CR-35's index half): the dev- prefix is matched against registry-id fields
+  only (a document's own ``registry_id`` and each dependency's), never
+  against a URL, a display name or free text (``dev_lineage_in_records:``);
 - a yank record whose release carries no ``status.json`` with lifecycle
   yanked-or-revoked is refused (``yank_status_absent:``; fold R2 renamed by
   issue #225 slice 3 to the design's prefix family): ``status.json`` is
@@ -45,6 +47,18 @@ separators, one trailing newline), schema-valid against
   (``transfer_receiver_unvetted:``), a vetting reference that resolves to
   the receiver's citation (``transfer_vetting_unresolved:``) and consents
   naming both publishers (``transfer_consents_incomplete:``) — CR-17/Q9;
+- the kind tag agrees with what the record is (issue #227 slice 5,
+  CR-56/CR-57): ``community-shared`` rides only the share and takedown
+  records of a shared listing (``record_kind_mismatch:``), a share record is
+  a listing by definition, one key holds at most one share record
+  (``shared_listing_duplicate:``), a listing's key holds no release and no
+  record of another kind (``shared_listing_conflict:``), and a shared
+  takedown needs a listing to unlist (``record_subject_absent:``);
+- the publish pairing is closed in BOTH directions (issue #227 fold wave 1):
+  as well as every publish record needing the manifest it pins, every manifest
+  under ``releases/`` needs a publish record whose ``release_manifest_sha256``
+  pins its bytes (``release_without_publish_record:``), so a release that was
+  reviewed but never published refuses;
 - the review block inside a published release's manifest pins the review
   record's own canonical digest, and the record's closure digest matches the
   manifest's dependency closure (the review-to-sign swap defense, CR-11/CR-14).
@@ -69,6 +83,15 @@ REPO = Path(__file__).resolve().parents[1]
 RECORDS = REPO / "records"
 
 _SCHEMA_CACHE: dict[str, jsonschema.Draft202012Validator] = {}
+
+#: CR-57 (issue #227 slice 5): the kind tag of a shared listing. Only a
+#: listing's own share and takedown records may carry it — sharing is not an
+#: admission path, so a review or release lifecycle record never wears it.
+SHARED_KIND = "community-shared"
+
+#: The (publisher, plugin, version) a record is about; members are Any
+#: because a malformed block is the schema's refusal, not this module's.
+RecordKey = tuple[Any, Any, Any]
 
 
 def canonical_bytes(obj: object) -> bytes:
@@ -321,6 +344,87 @@ def _record_publisher(parsed: dict[str, Any]) -> str | None:
     return lifecycle.get("publisher") if isinstance(lifecycle, dict) else None
 
 
+def _record_key(parsed: dict[str, Any]) -> RecordKey | None:
+    """The (publisher, plugin, version) a record is about, whatever its
+    class — None when the block carries no identity (the schema refuses it)."""
+    block = parsed.get("review" if parsed.get("record_type") == "review" else "lifecycle")
+    if not isinstance(block, dict):
+        return None
+    return (block.get("publisher"), block.get("plugin"), block.get("version"))
+
+
+def _dev_lineage_ids(record: dict[str, Any]) -> list[str]:
+    """The dev-prefixed registry ids a record carries: its own ``registry_id``
+    and each dependency's (``dependencies[].registry_id``), the reads the
+    releases half makes on a manifest. A member of another type is not a
+    registry id; the schema refuses it on its own account."""
+    found: list[str] = []
+    own = record.get("registry_id")
+    if isinstance(own, str) and own.startswith("dev-"):
+        found.append(own)
+    dependencies = record.get("dependencies")
+    if isinstance(dependencies, list):
+        for dependency in dependencies:
+            if not isinstance(dependency, dict):
+                continue
+            registry_id = dependency.get("registry_id")
+            if isinstance(registry_id, str) and registry_id.startswith("dev-"):
+                found.append(registry_id)
+    return found
+
+
+def _share_findings(
+    path: Path,
+    key: RecordKey,
+    siblings: list[tuple[Path, dict[str, Any]]],
+    manifests: dict[tuple[str, str, str], Path],
+) -> list[str]:
+    """The shared-listing integrity arms (issue #227 slice 5, CR-57).
+
+    One key is one subject: a listing owns its (publisher, plugin, version)
+    alone — no release, no record of another kind, and no second share
+    record. A later share record at a key a takedown already closed is the
+    same duplicate (a takedown is terminal; the listing returns only as a new
+    version).
+    """
+    findings: list[str] = []
+    label = "/".join(str(part) for part in key)
+    if key in manifests:
+        findings.append(
+            f"shared_listing_conflict:{path.name}: a release exists for {label} — a "
+            "shared listing never shares an identity with a release (CR-57)"
+        )
+    shares = [
+        sibling
+        for sibling, parsed in siblings
+        if parsed.get("record_type") == "lifecycle"
+        and (parsed.get("lifecycle") or {}).get("op") == "share"
+    ]
+    if shares and path != shares[0]:
+        findings.append(
+            f"shared_listing_duplicate:{path.name}: {label} already carries a share "
+            f"record ({shares[0].name}) — a key holds one listing, and a taken-down "
+            "listing returns only as a new version"
+        )
+    for sibling, parsed in siblings:
+        lifecycle = parsed.get("lifecycle") or {}
+        is_shared_takedown = (
+            parsed.get("record_type") == "lifecycle"
+            and lifecycle.get("op") == "takedown"
+            and parsed.get("kind") == SHARED_KIND
+        )
+        # A later share record is the duplicate rule's finding, never a
+        # second conflict for the same defect.
+        if sibling in shares or is_shared_takedown:
+            continue
+        findings.append(
+            f"shared_listing_conflict:{path.name}: {sibling.name} "
+            f"(kind {parsed.get('kind')}) shares the listing's identity {label} — a "
+            "listing's key holds only its share record and shared-kind takedowns (CR-57)"
+        )
+    return findings
+
+
 def _transfer_findings(
     name: str, lifecycle: dict[str, Any], publishers_doc: dict[str, Any] | None
 ) -> list[str]:
@@ -534,6 +638,16 @@ def validate_tree(root: Path) -> list[str]:
     reviews = _review_records(parsed_by_path)
     manifests = _release_manifests(releases_dir)
 
+    # Issue #227 slice 5: every record grouped by the key it is about, all
+    # classes together, in record order. The listing-integrity arms compare a
+    # share record against EVERYTHING at its key, so they collect first and
+    # evaluate second (the two-pass discipline the lifecycle arms use).
+    records_by_key: dict[RecordKey, list[tuple[Path, dict[str, Any]]]] = {}
+    for path, parsed in sorted(parsed_by_path.items(), key=lambda item: _record_order(item[0])):
+        key = _record_key(parsed)
+        if key is not None:
+            records_by_key.setdefault(key, []).append((path, parsed))
+
     vetted_publishers: set[str] = set()
     if publishers_doc is not None:
         vetted_publishers, vetting_findings = _vetting_checks(root, publishers_doc)
@@ -592,6 +706,10 @@ def validate_tree(root: Path) -> list[str]:
     findings.extend(_seq_uniqueness_findings(parsed_by_path))
 
     publish_keys: set[tuple[str, str, str]] = set()
+    #: Each key's publish-record pins (the ``release_manifest_sha256`` each
+    #: publish record names). The reverse arm below reads them from the
+    #: release's side; the per-record arm below reads the other way.
+    publish_pins: dict[tuple[str, str, str], list[str]] = {}
     yank_keys: set[tuple[str, str, str]] = set()
     advisory_ids: dict[tuple[str, str, str], set[str]] = {}
     # Fold row 2 (two-pass): the per-record arms compare against keys drawn
@@ -610,6 +728,9 @@ def validate_tree(root: Path) -> list[str]:
         )
         if lifecycle.get("op") == "publish":
             publish_keys.add(collect_key)
+            recorded_digest = lifecycle.get("release_manifest_sha256")
+            if isinstance(recorded_digest, str) and recorded_digest:
+                publish_pins.setdefault(collect_key, []).append(recorded_digest)
         elif lifecycle.get("op") in ("yank", "takedown"):
             yank_keys.add(collect_key)
         if lifecycle.get("op") == "advisory":
@@ -618,8 +739,17 @@ def validate_tree(root: Path) -> list[str]:
                 advisory_ids.setdefault(collect_key, set()).add(str(advisory["id"]))
 
     for path, parsed in parsed_by_path.items():
-        # CR-35's index half: no dev-prefixed registry id in any record.
-        if "dev-" in json.dumps(parsed):
+        # CR-35's records half: no dev-prefixed registry id reaches a record.
+        # The dev- PREFIX is matched against the record's registry-id fields,
+        # the same two reads the releases half makes above (the document's
+        # own registry_id and each dependency's). The records schema admits
+        # no registry-id member — every object is closed, and the SDK's
+        # closure-diff writer emits package ids — so a valid record carries
+        # none and the arm fires only on a record that does. It is NOT a
+        # substring over the whole record (issue #227 fold wave 1): a source
+        # URL, a display name or free text that merely contains "dev-" is not
+        # lineage and does not refuse.
+        if _dev_lineage_ids(parsed):
             findings.append(f"dev_lineage_in_records:{path.name}")
         # CR-15's records half (issue #225): every record's publisher is a
         # vetted publishers.json entry.
@@ -630,6 +760,13 @@ def validate_tree(root: Path) -> list[str]:
                     f"publisher_unvetted:{path.name}: {claimed} is not a vetted "
                     "publishers.json entry"
                 )
+        # CR-56/CR-57 (issue #227 slice 5): a review record is an admission
+        # review; it can never be a shared listing.
+        if parsed.get("record_type") == "review" and parsed.get("kind") == SHARED_KIND:
+            findings.append(
+                f"record_kind_mismatch:{path.name}: a review record cannot carry "
+                f"kind {SHARED_KIND} — sharing is not an admission path"
+            )
         if parsed.get("record_type") != "lifecycle":
             continue
         lifecycle = parsed.get("lifecycle", {})
@@ -678,6 +815,39 @@ def validate_tree(root: Path) -> list[str]:
             lifecycle.get("version"),
         )
         op = lifecycle.get("op")
+        kind = parsed.get("kind")
+        # CR-56/CR-57 (issue #227 slice 5): the kind tag agrees with what the
+        # record is. A share record IS a listing; the shared kind rides
+        # nothing but a listing's own share and takedown records.
+        if op == "share":
+            if kind != SHARED_KIND:
+                findings.append(
+                    f"record_kind_mismatch:{path.name}: a share record carries "
+                    f"kind {kind} — a shared listing is kind {SHARED_KIND}"
+                )
+            findings.extend(_share_findings(path, key, records_by_key.get(key, []), manifests))
+            continue
+        if kind == SHARED_KIND:
+            if op != "takedown":
+                findings.append(
+                    f"record_kind_mismatch:{path.name}: kind {SHARED_KIND} is legal "
+                    f"only on share and takedown records, not {op} — sharing is "
+                    "not an admission path"
+                )
+                continue
+            # The shared takedown needs a listing to unlist.
+            shares = [
+                sibling
+                for sibling, sibling_parsed in records_by_key.get(key, [])
+                if (sibling_parsed.get("lifecycle") or {}).get("op") == "share"
+            ]
+            if not shares:
+                findings.append(
+                    f"record_subject_absent:{path.name}: takedown for "
+                    f"{'/'.join(str(part) for part in key)} but its shared "
+                    "listing does not exist"
+                )
+            continue
         # Fold G5 (inert-record existence): a lifecycle record whose SUBJECT
         # does not exist is inert — refused loudly instead of merging green.
         # withdraw's subject is the submission (the staged artefacts or a
@@ -829,6 +999,31 @@ def validate_tree(root: Path) -> list[str]:
                 f"review_outcome_mismatch:{release_path.name}: manifest review block says "
                 f"{block.get('outcome')}, record says {review.get('outcome')}"
             )
+
+    # The reverse arm of the publish check (issue #227 fold wave 1): every
+    # manifest under releases/ is governed by a publish record that pins its
+    # bytes. The arm above reads publish record -> manifest, one direction. A
+    # manifest with NO publish record (a release reviewed but never
+    # published) was invisible to it and the index generator served that
+    # release as admitted. Read from the release's side the pairing is closed
+    # in both directions, the way the yank and advisory pairings below are.
+    for key, manifest_path in sorted(manifests.items()):
+        if sha256_hex(manifest_path.read_bytes()) in publish_pins.get(key, []):
+            continue
+        rel = manifest_path.relative_to(releases_dir).as_posix()
+        label = "/".join(str(part) for part in key)
+        # A publish record that exists but names other bytes is the forward
+        # arm's mismatch; this arm adds the release it leaves ungoverned.
+        detail = (
+            "its publish record pins other bytes"
+            if key in publish_keys
+            else "no publish record exists for it"
+        )
+        findings.append(
+            f"release_without_publish_record:{rel}: {detail} ({label}) — a "
+            "manifest under releases/ is published only by a publish record "
+            "that pins its bytes"
+        )
 
     # §2.3's reverse pairing: a served status saying yanked or revoked with
     # no governing yank/takedown record — record and served state cannot

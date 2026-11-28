@@ -62,25 +62,39 @@ REPO = Path(__file__).resolve().parents[1]
 #: ``tests/test_catalogue_page.py``. One constant, two carriers.
 TRUNCATE_AT = 12
 
-#: The two slice-1 unverified markers' display strings (CR-37/NFR-S1). An
-#: unknown marker id renders VERBATIM — forward-honest, never dropped. This
+#: The unverified markers' display strings (CR-37/NFR-S1). An unknown marker
+#: id renders VERBATIM — forward-honest, never dropped. The third entry is
+#: slice 5's (issue #227): the marker every community-shared row carries. This
 #: map is the generation-time authority; ``catalogue/assets/plugins.js``
 #: carries a twin for cloned rows, pinned byte-equal by the page tests.
 MARKER_DISPLAY: dict[str, str] = {
     "conformance-evidence-self-attested": "conformance evidence self-attested",
     "review-is-process-not-proof": "review is process, not proof",
+    "community-shared-not-reviewed": "shared by the author, not reviewed",
 }
+
+#: CR-57 (issue #227 slice 5): a community-shared row's marker is STRUCTURAL.
+#: It derives from the row's KIND, never from the row's own marker list alone,
+#: so no shared row can render without it — an empty or foreign list still
+#: renders the marker. The JS ``rowMarkers`` is the twin.
+SHARED_KIND = "community-shared"
+SHARED_MARKER = "community-shared-not-reviewed"
 
 #: The record page's marker EXPLANATIONS (§2.6) — a SINGLE-CARRIER map
 #: (record pages are static; no JS clones them), seeded with the mockup's
-#: two sentences. An unknown marker id renders its id with no explanation
-#: line (forward-honest, CR-37 kin) — pinned by the record-page tests.
+#: two sentences and extended by issue #227 slice 5 with the shared marker's.
+#: An unknown marker id renders its id with no explanation line
+#: (forward-honest, CR-37 kin) — pinned by the record-page tests.
 MARKER_EXPLANATION: dict[str, str] = {
     "conformance-evidence-self-attested": (
         "The publisher ran and reported the conformance evidence."
     ),
     "review-is-process-not-proof": (
         "Review followed the registry process; it does not prove behaviour."
+    ),
+    SHARED_MARKER: (
+        "The author shared this entry. The registry did not review it and did "
+        "not check anything in it."
     ),
 }
 
@@ -156,6 +170,40 @@ ADMISSION_NOTICE = (
 #: The honest-negative hardware line (§2.6 — derived, rendered iff no
 #: hardware-evidence entry exists).
 NO_HARDWARE_LINE = "No hardware evidence is recorded for this release."
+
+#: The record template's title and the one a community-shared listing wears
+#: (issue #227 slice 5): the entry is not a release and its title does not
+#: call it one.
+RECORD_TITLE = "<title>Release record — BenchWeave Registry</title>"
+SHARED_RECORD_TITLE = "<title>Community-shared listing, BenchWeave Registry</title>"
+
+#: The shared-listing page's prose (issue #227 slice 5, CR-57; ASD-STE100
+#: register — short sentences, active voice). It states what a shared entry
+#: is and is not, and claims no protection the lane does not provide (NFR-S1).
+SHARED_NOTICE = (
+    "The author shared this entry. The registry did not review it and did not "
+    "admit it. The registry did not check anything on this page."
+)
+SHARED_VETTING_LINE = "It covers the publisher identity only. It does not cover this entry."
+SHARED_DECLARED_LINE = "The author declared these values. The registry did not check them."
+SHARED_EVIDENCE_LINE = "None. The registry has no test evidence for this entry."
+SHARED_NOT_A_RELEASE = (
+    "This entry has no release files, no signature and no status document. "
+    "Your gateway cannot admit it through registry admission."
+)
+SHARED_BEFORE_YOU_USE_IT = (
+    "A plugin runs in-process with full gateway authority. No sandbox isolates "
+    "it. Read the source at the pinned revision before you use it on a bench."
+)
+#: Q20: anyone may request a takedown; the handling is recorded and no response
+#: time is promised. The request channel is the family's single issue stream.
+SHARED_TAKEDOWN_HEAD = "Anyone can request a takedown. "
+TAKEDOWN_TRACKER_URL = "https://github.com/madeinoz67/benchweave/issues"
+SHARED_TAKEDOWN_LINK = "Open an issue on the BenchWeave tracker"
+SHARED_TAKEDOWN_TAIL = (
+    "The registry records the handling in the repository of record and does "
+    "not promise a response time."
+)
 
 _SVG_ATTRS = (
     'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
@@ -350,11 +398,20 @@ def _sig_cell(row: dict[str, Any], *, blank: bool = False) -> str:
     )
 
 
+def row_markers(row: dict[str, Any]) -> list[str]:
+    """The markers a row renders: its own list, plus the shared marker first
+    when the row is community-shared and its list does not carry it."""
+    markers = [str(marker) for marker in row.get("unverified_markers") or []]
+    if row.get("kind") == SHARED_KIND and SHARED_MARKER not in markers:
+        markers.insert(0, SHARED_MARKER)
+    return markers
+
+
 def _markers_text(row: dict[str, Any]) -> str:
-    markers = row.get("unverified_markers") or []
+    markers = row_markers(row)
     if not markers:
         return ""
-    joined = "; ".join(MARKER_DISPLAY.get(str(m), str(m)) for m in markers)
+    joined = "; ".join(MARKER_DISPLAY.get(marker, marker) for marker in markers)
     return f"Unverified: {joined}"
 
 
@@ -689,6 +746,239 @@ def _date_part(value: Any) -> str:
     return str(value or "")[:10]
 
 
+def _row_label(row: dict[str, Any]) -> str:
+    return f"{row.get('registry_id')}/{row.get('package_id')}/{row.get('version')}"
+
+
+def _joined_versions(values: Any) -> str:
+    items = [str(v) for v in (values or [])]
+    return (
+        f'<span class="mono">{_esc(", ".join(items))}</span>'
+        if items
+        else '<span class="muted">none declared</span>'
+    )
+
+
+def _compatibility_table(row: dict[str, Any], *, with_transport: bool = True) -> str:
+    """The compatibility table (CR-19: carried verbatim). The transport row
+    rides release pages only — a shared listing declares no providers."""
+    compat = row.get("compatibility") or {}
+    rows = [
+        _kv_row("OTDP", _joined_versions(compat.get("otdp_versions"))),
+        _kv_row("Adapter API", _joined_versions(compat.get("adapter_api_versions"))),
+        _kv_row("STG", _joined_versions(compat.get("stg_versions"))),
+    ]
+    if with_transport:
+        triples = row.get("transport_triples") or []
+        if triples:
+            triple_html = "<br>".join(
+                f'<span class="mono" title="{_esc(str(t.get("sha256")))}">'
+                f"{_esc(str(t.get('id')))} · {_esc(str(t.get('version')))} · "
+                f"{_esc(_short(str(t.get('sha256'))))}</span>"
+                for t in triples
+            )
+        else:
+            triple_html = '<span class="muted">None declared</span>'
+        rows.append(_kv_row("Transport providers", triple_html))
+    return "<table>" + "".join(rows) + "</table>"
+
+
+def _capabilities_table(row: dict[str, Any]) -> str:
+    """The CR-45 declaration as Yes/No per member."""
+    caps = row.get("capabilities") or {}
+
+    def _yes_no(flag: Any) -> str:
+        return "Yes" if flag else "No"
+
+    return (
+        "<table>"
+        + "".join(
+            [
+                _kv_row("Network egress", _yes_no(caps.get("network_egress"))),
+                _kv_row(
+                    "Subprocess or native library",
+                    _yes_no(caps.get("subprocess_or_native_library")),
+                ),
+                _kv_row(
+                    "Filesystem writes beyond evidence retention",
+                    _yes_no(caps.get("filesystem_writes_beyond_evidence_retention")),
+                ),
+            ]
+        )
+        + "</table>"
+    )
+
+
+def _marker_list(markers: list[str]) -> str:
+    """The Unverified-markers list: each id as a warning badge, with its
+    explanation when the single-carrier map has one (an unknown id renders
+    alone — forward-honest)."""
+    lines: list[str] = []
+    for mid in markers:
+        explanation = MARKER_EXPLANATION.get(mid)
+        explanation_html = f'<span class="muted">{_esc(explanation)}</span>' if explanation else ""
+        lines.append(
+            f'<span class="marker-row"><span class="badge badge-warning mono">'
+            f"{_esc(mid)}</span>{explanation_html}</span>"
+        )
+    return (
+        '<div class="marker-list">' + "".join(lines) + "</div>"
+        if lines
+        else '<p class="muted">none recorded</p>'
+    )
+
+
+def _protections_html(publisher_entry: dict[str, Any]) -> str:
+    """The publisher's declared repository protections (Q21: rendered
+    declared-not-verified, never as a verified state)."""
+    protections = publisher_entry.get("publisher_repo_protections") or []
+    if not protections:
+        return '<p class="muted">none recorded</p>'
+    protection_rows = "".join(
+        "<dt>"
+        + _esc(PROTECTION_LABELS.get(str(p.get("protection")), str(p.get("protection"))))
+        + '</dt><dd><span class="badge badge-warning">'
+        + _esc(PROTECTION_STATE_DISPLAY.get(str(p.get("state")), str(p.get("state"))))
+        + "</span></dd>"
+        for p in protections
+    )
+    return f"<dl>{protection_rows}</dl>"
+
+
+def _breadcrumb(row: dict[str, Any]) -> str:
+    """Catalogue / publisher / plugin (the record pages' one nav line)."""
+    publisher = str(row.get("publisher") or "")
+    plugin = str(row.get("package_id") or "").split("/")[-1]
+    chevron = ICONS["chevron-right"]
+    return (
+        '<nav class="breadcrumb" aria-label="Breadcrumb">'
+        f'<a href="{UP_PREFIX}index.html">Catalogue</a>{chevron}'
+        f'<span class="mono">{_esc(publisher)}</span>{chevron}'
+        f'<span class="mono" aria-current="page">{_esc(plugin)}</span></nav>'
+    )
+
+
+def _pinned_source_url(row: dict[str, Any]) -> str:
+    """The pinned-source link: the declared repository at its pinned revision
+    (the ``/tree/<revision>`` form the GitHub-style forges serve)."""
+    url = str(row.get("source_url") or "").rstrip("/")
+    return f"{url}/tree/{row.get('source_revision') or ''}"
+
+
+def _shared_fragment(row: dict[str, Any], publisher_entry: dict[str, Any]) -> str:
+    """The shared-listing record page's main fragment (issue #227 slice 5).
+
+    CR-57's one-step view: the kind badge, the unverified marker (structural —
+    it derives from the row's kind), the publisher identity and the pinned
+    source. The page makes no release-class claim: no signature, no release
+    files, no status, no admission notice. Every author-declared value is
+    labelled as declared, and the page says in plain words that nobody
+    reviewed the entry (NFR-S1).
+    """
+    publisher = str(row.get("publisher") or "")
+    source_url = str(row.get("source_url") or "")
+    if not source_url.startswith("https://"):
+        raise SystemExit(
+            f"page_input_invalid: {_row_label(row)} — a community-shared row "
+            "must link an https source_url (the page links the pinned source)"
+        )
+    revision = str(row.get("source_revision") or "")
+    record_digest = str(row.get("manifest_sha256") or "")
+    chevron = ICONS["chevron-right"]
+    version_badge = (
+        f'<span class="badge badge-version mono">{_esc(str(row.get("version") or ""))}</span>'
+    )
+    kind_badge = f'<span class="badge badge-warning">{_esc(KIND_DISPLAY[SHARED_KIND])}</span>'
+    marker_pill = (
+        f'<span class="sig-pill sig-pill-unsigned" data-bw-marker="{SHARED_MARKER}" '
+        f'title="{_esc("Unverified: " + MARKER_DISPLAY[SHARED_MARKER])}">Unverified</span>'
+    )
+    vetted = publisher_entry.get("vetted_at")
+    vetted_html = f' <span class="muted">vetted {_esc(_date_part(vetted))}</span>' if vetted else ""
+    who = (
+        "<table>"
+        + "".join(
+            [
+                _kv_row("Publisher", f'<span class="mono">{_esc(publisher)}</span>{vetted_html}'),
+                _kv_row("Publisher vetting", SHARED_VETTING_LINE),
+                _kv_row(
+                    "Source repository",
+                    f'<a class="mono break-all" href="{_esc(source_url)}">{_esc(source_url)}</a>',
+                ),
+                _kv_row(
+                    "Pinned source revision",
+                    f'<span class="mono break-all">{_esc(revision)}</span>'
+                    f"{_copy_button(revision)}"
+                    f'<a class="report-link" href="{_esc(_pinned_source_url(row))}">'
+                    f"{chevron}Open the pinned source</a>",
+                ),
+                _kv_row(
+                    "Listing record SHA-256",
+                    f'<span class="mono break-all">{_esc(record_digest)}</span>'
+                    f"{_copy_button(record_digest)}",
+                ),
+                _kv_row(
+                    "Licence",
+                    f'<span class="mono">{_esc(str(row.get("licence_spdx") or ""))}</span>',
+                ),
+            ]
+        )
+        + "</table>"
+    )
+    takedown = (
+        f"{SHARED_TAKEDOWN_HEAD}"
+        f'<a href="{TAKEDOWN_TRACKER_URL}">{SHARED_TAKEDOWN_LINK}</a>. '
+        f"{SHARED_TAKEDOWN_TAIL}"
+    )
+    return "\n".join(
+        [
+            _breadcrumb(row),
+            '<div class="record-head">',
+            f'<div class="badge-row">{version_badge}{kind_badge}{marker_pill}</div>',
+            f"<h1>{_esc(str(row.get('display_name') or ''))}</h1>",
+            f'<p class="summary">{_esc(str(row.get("summary") or ""))}</p>',
+            "</div>",
+            f'<p class="shared-notice">{SHARED_NOTICE}</p>',
+            '<div class="record-grid">',
+            '<div class="record-main">',
+            f'<section aria-labelledby="prov-h"><h2 id="prov-h">Who shared it</h2>{who}</section>',
+            f'<section aria-labelledby="compat-h"><h2 id="compat-h">'
+            f"Compatibility declared by the author</h2>"
+            f"{_compatibility_table(row, with_transport=False)}</section>",
+            f'<section aria-labelledby="caps-h"><h2 id="caps-h">'
+            f"Capabilities declared by the author</h2>"
+            f'{_capabilities_table(row)}<p class="muted">{SHARED_DECLARED_LINE}</p></section>',
+            f'<section aria-labelledby="ev-h"><h2 id="ev-h">Evidence</h2>'
+            f'<p class="muted">{SHARED_EVIDENCE_LINE}</p></section>',
+            f'<section aria-labelledby="unv-h"><h2 id="unv-h">Unverified markers</h2>'
+            f"{_marker_list(row_markers(row))}</section>",
+            "</div>",
+            '<aside class="record-aside">',
+            f'<div class="aside-card"><h2>Not a release</h2>'
+            f'<p class="muted">{SHARED_NOT_A_RELEASE}</p></div>',
+            f'<div class="aside-card"><h2>Before you use it</h2>'
+            f'<p class="muted">{SHARED_BEFORE_YOU_USE_IT}</p></div>',
+            f'<div class="aside-card"><h2>Takedown</h2><p class="muted">{takedown}</p></div>',
+            f'<div class="aside-card"><h2>Publisher repository</h2>'
+            f"{_protections_html(publisher_entry)}</div>",
+            "</aside>",
+            "</div>",
+        ]
+    )
+
+
+def _refuse_signed_shared_row(row: dict[str, Any]) -> None:
+    """CR-57: a community-shared row is never signed. The generator cannot
+    emit one (the index schema refuses the state); if one reaches the page
+    generator anyway, nothing deploys."""
+    if row.get("signature_state") == "signed-valid":
+        raise SystemExit(
+            f"page_input_invalid: {_row_label(row)} — a community-shared row "
+            "cannot carry signature_state signed-valid (a listing has no "
+            "signature; the index schema refuses the state)"
+        )
+
+
 def _record_fragment(
     row: dict[str, Any],
     publisher_entry: dict[str, Any],
@@ -699,23 +989,15 @@ def _record_fragment(
     field of §2.6's set against the row model, the publisher entry (the
     render-time join) and the enumerated release files."""
     publisher = str(row.get("publisher") or "")
-    plugin = str(row.get("package_id") or "").split("/")[-1]
     tree_url = _esc(_release_tree_url(row, sha))
-    chevron = ICONS["chevron-right"]
-    breadcrumb = (
-        '<nav class="breadcrumb" aria-label="Breadcrumb">'
-        f'<a href="{UP_PREFIX}index.html">Catalogue</a>{chevron}'
-        f'<span class="mono">{_esc(publisher)}</span>{chevron}'
-        f'<span class="mono" aria-current="page">{_esc(plugin)}</span></nav>'
-    )
+    breadcrumb = _breadcrumb(row)
     signed = row.get("signature_state") == "signed-valid"
     version_badge = (
-        '<span class="badge badge-version mono">'
-        f'{_esc(str(row.get("version") or ""))}</span>'
+        f'<span class="badge badge-version mono">{_esc(str(row.get("version") or ""))}</span>'
     )
     kind_badge = (
         '<span class="badge badge-version">'
-        f'{_esc(KIND_DISPLAY.get(str(row.get("kind")), str(row.get("kind") or "")))}</span>'
+        f"{_esc(KIND_DISPLAY.get(str(row.get('kind')), str(row.get('kind') or '')))}</span>"
     )
     if signed:
         sig_pill = (
@@ -817,73 +1099,12 @@ def _record_fragment(
         evidence_rows.append(
             '<tr><td colspan="3" class="muted">no test evidence recorded</td></tr>'
         )
-    has_hardware = any(
-        str(entry.get("level")) == "hardware" for entry in row.get("evidence") or []
-    )
-    hardware_line = "" if has_hardware else f"<p class=\"muted\">{NO_HARDWARE_LINE}</p>"
+    has_hardware = any(str(entry.get("level")) == "hardware" for entry in row.get("evidence") or [])
+    hardware_line = "" if has_hardware else f'<p class="muted">{NO_HARDWARE_LINE}</p>'
 
-    compat = row.get("compatibility") or {}
-
-    def _joined(values: Any) -> str:
-        items = [str(v) for v in (values or [])]
-        return f'<span class="mono">{_esc(", ".join(items))}</span>' if items else (
-            '<span class="muted">none declared</span>'
-        )
-
-    triples = row.get("transport_triples") or []
-    if triples:
-        triple_html = "<br>".join(
-            f'<span class="mono" title="{_esc(str(t.get("sha256")))}">'
-            f"{_esc(str(t.get('id')))} · {_esc(str(t.get('version')))} · "
-            f"{_esc(_short(str(t.get('sha256'))))}</span>"
-            for t in triples
-        )
-    else:
-        triple_html = '<span class="muted">None declared</span>'
-    compatibility = "<table>" + "".join(
-        [
-            _kv_row("OTDP", _joined(compat.get("otdp_versions"))),
-            _kv_row("Adapter API", _joined(compat.get("adapter_api_versions"))),
-            _kv_row("STG", _joined(compat.get("stg_versions"))),
-            _kv_row("Transport providers", triple_html),
-        ]
-    ) + "</table>"
-
-    caps = row.get("capabilities") or {}
-
-    def _yes_no(flag: Any) -> str:
-        return "Yes" if flag else "No"
-
-    capabilities = "<table>" + "".join(
-        [
-            _kv_row("Network egress", _yes_no(caps.get("network_egress"))),
-            _kv_row(
-                "Subprocess or native library",
-                _yes_no(caps.get("subprocess_or_native_library")),
-            ),
-            _kv_row(
-                "Filesystem writes beyond evidence retention",
-                _yes_no(caps.get("filesystem_writes_beyond_evidence_retention")),
-            ),
-        ]
-    ) + "</table>"
-
-    marker_lines = []
-    for marker in row.get("unverified_markers") or []:
-        mid = str(marker)
-        explanation = MARKER_EXPLANATION.get(mid)
-        explanation_html = (
-            f'<span class="muted">{_esc(explanation)}</span>' if explanation else ""
-        )
-        marker_lines.append(
-            f'<span class="marker-row"><span class="badge badge-warning mono">'
-            f"{_esc(mid)}</span>{explanation_html}</span>"
-        )
-    markers_html = (
-        '<div class="marker-list">' + "".join(marker_lines) + "</div>"
-        if marker_lines
-        else '<p class="muted">none recorded</p>'
-    )
+    compatibility = _compatibility_table(row)
+    capabilities = _capabilities_table(row)
+    markers_html = _marker_list([str(m) for m in row.get("unverified_markers") or []])
 
     file_items: list[str] = []
     for entry in files:
@@ -901,27 +1122,7 @@ def _record_fragment(
         else '<p class="muted">none present</p>'
     )
 
-    protections = publisher_entry.get("publisher_repo_protections") or []
-    if protections:
-        protection_rows = "".join(
-            "<dt>"
-            + _esc(
-                PROTECTION_LABELS.get(
-                    str(p.get("protection")), str(p.get("protection"))
-                )
-            )
-            + "</dt><dd><span class=\"badge badge-warning\">"
-            + _esc(
-                PROTECTION_STATE_DISPLAY.get(
-                    str(p.get("state")), str(p.get("state"))
-                )
-            )
-            + "</span></dd>"
-            for p in protections
-        )
-        protections_html = f"<dl>{protection_rows}</dl>"
-    else:
-        protections_html = '<p class="muted">none recorded</p>'
+    protections_html = _protections_html(publisher_entry)
 
     advisories = row.get("advisories") or []
     if advisories:
@@ -994,7 +1195,13 @@ def render_record_page(
     index_version: int = 1,
     registry_mark: bool = False,
 ) -> str:
-    """One deployable record page (pure; no filesystem, deterministic)."""
+    """One deployable record page (pure; no filesystem, deterministic).
+
+    The kind picks the fragment: a release renders the release fragment, a
+    community-shared listing the shared one (issue #227 slice 5) — and wears
+    a title that does not call it a release.
+    """
+    shared = row.get("kind") == SHARED_KIND
     for marker, what in (
         (RECORD_BEGIN, "bw:record begin"),
         (RECORD_END, "bw:record end"),
@@ -1015,7 +1222,11 @@ def render_record_page(
     if not registry_mark:
         chrome = chrome.replace(WORDMARK_BEGIN, "", 1).replace(WORDMARK_END, "", 1)
     _check_structural(chrome, "catalogue/record.template.html (structural chrome)")
-    fragment = _record_fragment(row, publisher_entry, files, sha)
+    fragment = (
+        _shared_fragment(row, publisher_entry)
+        if shared
+        else _record_fragment(row, publisher_entry, files, sha)
+    )
     # F10 (reviewer R3, the fold): the record begin/end markers are
     # generation-time delimiters — they do not ride the served page.
     page = head + fragment + tail
@@ -1031,6 +1242,13 @@ def render_record_page(
         # output too (the fired posture keeps them — they wrap the
         # switched-in mark).
         page = page.replace(WORDMARK_BEGIN, "").replace(WORDMARK_END, "")
+    if shared:
+        if RECORD_TITLE not in page:
+            raise SystemExit(
+                "page_input_invalid: catalogue/record.template.html does not "
+                "carry the release-record title a shared listing replaces"
+            )
+        page = page.replace(RECORD_TITLE, SHARED_RECORD_TITLE, 1)
     return page.replace(PROVENANCE_MARKER, _stamp_html(sha, index_version), 1)
 
 
@@ -1171,11 +1389,18 @@ def main() -> int:
     _refuse_detail_id_collisions(rows)
     for row in rows:
         _publisher_entry_or_refuse(row, publishers)
-        if row.get("signature_state") == "signed-valid":
+        if row.get("kind") == SHARED_KIND:
+            # A listing has no release directory to verify against: the one
+            # state it must never be in is checked here, before any write.
+            _refuse_signed_shared_row(row)
+        elif row.get("signature_state") == "signed-valid":
             _verify_row_signature(root, row, publishers[str(row.get("publisher"))])
     page = render_page(
-        index_bytes, template, args.sha,
-        publisher_count=publisher_count, registry_mark=args.registry_mark,
+        index_bytes,
+        template,
+        args.sha,
+        publisher_count=publisher_count,
+        registry_mark=args.registry_mark,
     )
     (dest / "assets").mkdir(parents=True, exist_ok=True)
     (dest / "index.html").write_text(page, encoding="utf-8")
@@ -1189,10 +1414,17 @@ def main() -> int:
     written = 0
     for row in rows:
         entry = _publisher_entry_or_refuse(row, publishers)
-        files = _release_files(root, row)
+        # A community-shared listing has no release directory (issue #227
+        # slice 5): there are no release files to enumerate or link.
+        files = [] if row.get("kind") == SHARED_KIND else _release_files(root, row)
         record_page = render_record_page(
-            row, entry, files, args.sha, record_template,
-            index_version=index_version, registry_mark=args.registry_mark,
+            row,
+            entry,
+            files,
+            args.sha,
+            record_template,
+            index_version=index_version,
+            registry_mark=args.registry_mark,
         )
         out = dest / record_url(row)
         out.parent.mkdir(parents=True, exist_ok=True)
